@@ -13,7 +13,7 @@ import { getTodayISO } from '@/utils';
 
 const INITIAL = () => ({
   modele: '', pointure: '', couleur: '',
-  quantiteAchetee: '', prixAchat: '', prixVente: '',
+  quantiteAchetee: '', prixAchat: '',
   dateAchat: getTodayISO(), fournisseur: '',
 });
 
@@ -35,9 +35,8 @@ export default function AchatsScreen() {
     }
     const qty = parseInt(form.quantiteAchetee, 10);
     const pA = parseFloat(form.prixAchat);
-    const pV = parseFloat(form.prixVente);
-    if (!qty || qty <= 0 || !pA || pA <= 0 || !pV || pV <= 0) {
-      Alert.alert('Valeurs invalides', 'Quantité et prix doivent être des nombres positifs.');
+    if (!qty || qty <= 0 || !pA || pA <= 0) {
+      Alert.alert('Valeurs invalides', 'Quantité et prix d\'achat doivent être des nombres positifs.');
       return;
     }
     if (!form.dateAchat.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -52,7 +51,7 @@ export default function AchatsScreen() {
         couleur: form.couleur.trim(),
         quantiteAchetee: qty,
         prixAchat: pA,
-        prixVente: pV,
+        prixVente: 0,
         dateAchat: form.dateAchat,
         fournisseur: form.fournisseur.trim(),
       });
@@ -92,14 +91,7 @@ export default function AchatsScreen() {
 
         <Field label="QUANTITÉ ACHETÉE *" placeholder="1" value={form.quantiteAchetee} onChangeText={v => set('quantiteAchetee', v)} keyboardType="numeric" colors={c} />
 
-        <View style={s.row}>
-          <View style={s.half}>
-            <Field label="PRIX D'ACHAT (FCFA) *" placeholder="15000" value={form.prixAchat} onChangeText={v => set('prixAchat', v)} keyboardType="numeric" colors={c} />
-          </View>
-          <View style={s.half}>
-            <Field label="PRIX DE VENTE (FCFA) *" placeholder="25000" value={form.prixVente} onChangeText={v => set('prixVente', v)} keyboardType="numeric" colors={c} />
-          </View>
-        </View>
+        <Field label="PRIX D'ACHAT (FCFA) *" placeholder="15000" value={form.prixAchat} onChangeText={v => set('prixAchat', v)} keyboardType="numeric" colors={c} />
 
         <Field label="DATE D'ACHAT" placeholder="AAAA-MM-JJ" value={form.dateAchat} onChangeText={v => set('dateAchat', v)} colors={c} />
         <Field label="FOURNISSEUR (OPTIONNEL)" placeholder="Nom du fournisseur" value={form.fournisseur} onChangeText={v => set('fournisseur', v)} colors={c} />

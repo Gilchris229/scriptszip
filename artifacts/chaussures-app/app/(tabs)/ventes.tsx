@@ -48,6 +48,13 @@ export default function VentesScreen() {
       return;
     }
     const prixU = selectedStock.achat.prixVente;
+    if (!prixU || prixU <= 0) {
+      Alert.alert(
+        'Prix de vente non défini',
+        'Définissez le prix de vente de cet article dans le Stock avant de le vendre.',
+      );
+      return;
+    }
     const total = prixU * qty;
     let montantPaye = total;
     let resteAPayer = 0;
