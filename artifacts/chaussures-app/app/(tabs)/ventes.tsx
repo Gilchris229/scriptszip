@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  Platform, ActivityIndicator, Modal, FlatList,
+  Platform, ActivityIndicator, Modal, FlatList, Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,12 +41,26 @@ export default function VentesScreen() {
   const [form, setForm] = useState(INIT_FORM());
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<SuccessData | null>(null);
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+
+  const showBanner = (data: SuccessData) => {
+    setSuccess(data);
+    Animated.timing(bannerOpacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+    timerRef.current = setTimeout(() => {
+      Animated.timing(bannerOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => setSuccess(null));
+    }, 4000);
+  };
 
   const stockList = useMemo(() => getStockList().filter(s => s.quantiteRestante > 0), [getStockList]);
   const selectedStock = useMemo(() => stockList.find(s => s.achat.id === selectedAchatId), [stockList, selectedAchatId]);
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
-  const reset = () => { setSelectedAchatId(''); setForm(INIT_FORM()); setSuccess(null); };
+  const reset = () => { setSelectedAchatId(''); setForm(INIT_FORM()); };
 
   const selectArticle = (achatId: string) => {
     setSelectedAchatId(achatId);
@@ -106,7 +120,7 @@ export default function VentesScreen() {
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       checkAndNotify();
-      setSuccess({
+      const venteData: SuccessData = {
         venteId: vente.id,
         modele: selectedStock.achat.modele,
         pointure: selectedStock.achat.pointure,
@@ -116,9 +130,10 @@ export default function VentesScreen() {
         estCredit: form.estCredit,
         resteAPayer,
         client: form.client.trim(),
-      });
+      };
       setSelectedAchatId('');
       setForm(INIT_FORM());
+      showBanner(venteData);
     } catch {
       Alert.alert('Erreur', "L'enregistrement a échoué.");
     } finally {
@@ -151,60 +166,32 @@ export default function VentesScreen() {
         </View>
       )}
 
-      {success ? (
-        /* ── Success state ── */
-
-        <View style={s.successWrap}>
-          <View style={[s.successCard, { backgroundColor: c.card }]}>
-            <View style={s.successIconCircle}>
-              <Ionicons name="checkmark" size={36} color="#fff" />
-            </View>
-            <Text style={[s.successTitle, { color: c.foreground }]}>Vente enregistrée !</Text>
-            <Text style={[s.successSub, { color: c.mutedForeground }]}>Le stock a bien été mis à jour.</Text>
-
-            <View style={[s.successDetails, { backgroundColor: c.background }]}>
-              <DetailRow label="Article" value={success.modele} colors={c} />
-              <DetailRow label="Pointure" value={success.pointure} colors={c} />
-              <DetailRow label="Couleur" value={success.couleur} colors={c} />
-              <DetailRow label="Quantité" value={`${success.quantite} paire${success.quantite > 1 ? 's' : ''}`} colors={c} />
-              {success.client ? <DetailRow label="Client" value={success.client} colors={c} /> : null}
-              <DetailRow
-                label="Total"
-                value={formatCFA(success.total)}
-                valueColor="#22c55e"
-                colors={c}
-              />
-              {success.estCredit && success.resteAPayer > 0 && (
-                <DetailRow
-                  label="Reste à payer"
-                  value={formatCFA(success.resteAPayer)}
-                  valueColor="#ef4444"
-                  colors={c}
-                  last
-                />
-              )}
-              {(!success.estCredit || success.resteAPayer === 0) && (
-                <DetailRow label="Statut" value="Payé ✓" valueColor="#22c55e" colors={c} last />
-              )}
-            </View>
+      {/* Success banner */}
+      {success && (
+        <Animated.View style={[s.banner, { opacity: bannerOpacity }]}>
+          <View style={s.bannerIcon}>
+            <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
           </View>
-
-          {/* Action buttons */}
+          <View style={{ flex: 1 }}>
+            <Text style={s.bannerTitle}>Vente enregistrée ! · {formatCFA(success.total)}</Text>
+            <Text style={s.bannerSub} numberOfLines={1}>
+              {success.modele} · ×{success.quantite}{success.estCredit && success.resteAPayer > 0 ? ` · Reste: ${formatCFA(success.resteAPayer)}` : ''}
+            </Text>
+          </View>
           <TouchableOpacity
-            style={[s.receiptBtn, { backgroundColor: c.primary }]}
-            onPress={() => { setSuccess(null); router.push(`/recu/${success.venteId}`); }}
+            style={s.bannerReceiptBtn}
+            onPress={() => { if (timerRef.current) clearTimeout(timerRef.current); setSuccess(null); router.push(`/recu/${success.venteId}`); }}
           >
-            <Ionicons name="receipt-outline" size={18} color="#fff" />
-            <Text style={s.receiptBtnText}>Voir le reçu</Text>
+            <Ionicons name="receipt-outline" size={15} color="#22c55e" />
+            <Text style={s.bannerReceiptText}>Reçu</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => { if (timerRef.current) clearTimeout(timerRef.current); setSuccess(null); }}>
+            <Ionicons name="close" size={18} color="#22c55e" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
-          <TouchableOpacity style={[s.newBtn, { backgroundColor: c.card, borderColor: c.border }]} onPress={reset}>
-            <Ionicons name="add" size={18} color={c.foreground} />
-            <Text style={[s.newBtnText, { color: c.foreground }]}>Nouvelle vente</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        /* ── Form ── */
+      {/* ── Form (always visible) ── */}
         <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.form} keyboardShouldPersistTaps="handled" bottomOffset={80}>
           {/* Article picker */}
           <Text style={[s.label, { color: c.mutedForeground }]}>ARTICLE *</Text>
@@ -304,7 +291,6 @@ export default function VentesScreen() {
           </View>
           <View style={{ height: Platform.OS === 'web' ? 120 : 100 }} />
         </KeyboardAwareScrollView>
-      )}
 
       {/* Stock picker modal */}
       <Modal visible={pickerVisible} transparent animationType="slide">
@@ -413,17 +399,13 @@ const s = StyleSheet.create({
   resetText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   submitBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 14 },
   submitText: { fontSize: 15, color: '#fff', fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
-  // Success
-  successWrap: { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 12, paddingBottom: 40 },
-  successCard: { borderRadius: 20, padding: 24, alignItems: 'center', gap: 10 },
-  successIconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  successTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'Inter_700Bold' },
-  successSub: { fontSize: 14, fontFamily: 'Inter_400Regular', marginBottom: 8 },
-  successDetails: { width: '100%', borderRadius: 12, overflow: 'hidden', marginTop: 4 },
-  receiptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15 },
-  receiptBtnText: { fontSize: 15, color: '#fff', fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
-  newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, borderWidth: 1 },
-  newBtnText: { fontSize: 15, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  // Banner
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginBottom: 8, backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  bannerIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  bannerTitle: { fontSize: 12, fontWeight: '700', fontFamily: 'Inter_700Bold', color: '#22c55e' },
+  bannerSub: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#22c55e', opacity: 0.85 },
+  bannerReceiptBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(34,197,94,0.2)' },
+  bannerReceiptText: { fontSize: 11, fontWeight: '600', fontFamily: 'Inter_600SemiBold', color: '#22c55e' },
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
