@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AlertTriangle } from 'lucide-react-native';
 import { useColors } from '@/hooks/useColors';
@@ -14,11 +15,19 @@ export default function DashboardScreen() {
   const { reglages, ventes, getKPIs } = useStore();
   const { getLowStockItems } = useStockAlerts();
   const [mois, setMois] = useState(getCurrentMonth());
+  const [, forceUpdate] = useState(0);
 
-  const kpis = useMemo(() => getKPIs(mois), [getKPIs, mois]);
-  const recentVentes = useMemo(() => ventes.slice(0, 12), [ventes]);
+  // Force re-render each time the tab is focused so KPIs are always up-to-date
+  useFocusEffect(() => { forceUpdate(n => n + 1); });
+
+  // Computed fresh every render — no stale memoisation
+  const kpis = getKPIs(mois);
+  const recentVentes = ventes
+    .filter(v => v.dateVente.startsWith(mois))
+    .sort((a, b) => b.dateVente.localeCompare(a.dateVente))
+    .slice(0, 12);
   const canGoNext = mois < getCurrentMonth();
-  const lowStockItems = useMemo(() => getLowStockItems(), [getLowStockItems]);
+  const lowStockItems = getLowStockItems();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 67 : insets.top + 16 }]}>
@@ -116,11 +125,11 @@ export default function DashboardScreen() {
         )}
 
         {/* Recent sales */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ventes récentes</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ventes du mois</Text>
         {recentVentes.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="bag-outline" size={44} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Aucune vente enregistrée</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Aucune vente ce mois-ci</Text>
           </View>
         ) : (
           recentVentes.map(v => (
