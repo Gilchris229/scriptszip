@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, StyleSheet, useColorScheme, View, Text } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -8,6 +8,7 @@ import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 function NativeTabLayout() {
   return (
@@ -37,6 +38,29 @@ function NativeTabLayout() {
         <Label>Plus</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
+  );
+}
+
+function StockTabIcon({ color, isIOS }: { color: string; isIOS: boolean }) {
+  const { getLowStockCount } = useStockAlerts();
+  const count = getLowStockCount();
+  return (
+    <View style={{ position: 'relative' }}>
+      {isIOS
+        ? <SymbolView name="shippingbox" tintColor={color} size={22} />
+        : <Ionicons name="cube-outline" size={20} color={color} />}
+      {count > 0 && (
+        <View style={{
+          position: 'absolute', top: -4, right: -6,
+          backgroundColor: '#ef4444', borderRadius: 7,
+          minWidth: 14, height: 14,
+          alignItems: 'center', justifyContent: 'center',
+          paddingHorizontal: 2,
+        }}>
+          <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{count}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -110,10 +134,7 @@ function ClassicTabLayout() {
         name="stock"
         options={{
           title: 'Stock',
-          tabBarIcon: ({ color }) =>
-            isIOS
-              ? <SymbolView name="shippingbox" tintColor={color} size={22} />
-              : <Ionicons name="cube-outline" size={20} color={color} />,
+          tabBarIcon: ({ color }) => <StockTabIcon color={color} isIOS={isIOS} />,
         }}
       />
       <Tabs.Screen

@@ -15,10 +15,19 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StoreProvider } from '@/context/StoreContext';
 import { useColors } from '@/hooks/useColors';
+import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+function StockAlertsInit() {
+  const { checkAndNotify, requestPermissions } = useStockAlerts();
+  useEffect(() => {
+    requestPermissions().then(() => checkAndNotify());
+  }, []);
+  return null;
+}
 
 function ThemedStack() {
   const colors = useColors();
@@ -67,6 +76,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <StoreProvider>
+                <StockAlertsInit />
                 <ThemedStack />
               </StoreProvider>
             </KeyboardProvider>

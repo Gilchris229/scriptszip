@@ -11,6 +11,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, getTodayISO } from '@/utils';
+import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 const INIT_FORM = () => ({
   client: '', quantite: '1', dateVente: getTodayISO(),
@@ -33,6 +34,7 @@ export default function VentesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getStockList, addVente } = useStore();
+  const { checkAndNotify } = useStockAlerts();
 
   const [selectedAchatId, setSelectedAchatId] = useState('');
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -97,6 +99,7 @@ export default function VentesScreen() {
         resteAPayer,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      checkAndNotify();
       setSuccess({
         venteId: vente.id,
         modele: selectedStock.achat.modele,

@@ -2,19 +2,23 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { AlertTriangle } from 'lucide-react-native';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate, getCurrentMonth, getMonthLabel, addMonth } from '@/utils';
+import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { reglages, ventes, getKPIs } = useStore();
+  const { getLowStockItems } = useStockAlerts();
   const [mois, setMois] = useState(getCurrentMonth());
 
   const kpis = useMemo(() => getKPIs(mois), [getKPIs, mois]);
   const recentVentes = useMemo(() => ventes.slice(0, 12), [ventes]);
   const canGoNext = mois < getCurrentMonth();
+  const lowStockItems = useMemo(() => getLowStockItems(), [getLowStockItems]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 67 : insets.top + 16 }]}>
@@ -82,6 +86,34 @@ export default function DashboardScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Stock alerts */}
+        {lowStockItems.length > 0 && (
+          <>
+            <View style={[styles.alertsHeader, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }]}>
+              <AlertTriangle size={18} color="#ef4444" />
+              <Text style={[styles.alertsTitle, { color: '#ef4444' }]}>
+                Alertes stock ({lowStockItems.length})
+              </Text>
+            </View>
+            {lowStockItems.map(item => (
+              <View key={item.achat.id} style={[styles.alertRow, { backgroundColor: colors.card, borderLeftColor: '#ef4444' }]}>
+                <View style={styles.alertLeft}>
+                  <Text style={[styles.alertName, { color: colors.foreground }]}>{item.achat.modele}</Text>
+                  <Text style={[styles.alertMeta, { color: colors.mutedForeground }]}>
+                    {item.achat.pointure} · {item.achat.couleur}
+                  </Text>
+                </View>
+                <View style={[styles.alertBadge, { backgroundColor: item.quantiteRestante <= 1 ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)' }]}>
+                  <Text style={[styles.alertBadgeText, { color: item.quantiteRestante <= 1 ? '#ef4444' : '#f59e0b' }]}>
+                    {item.quantiteRestante} restant{item.quantiteRestante > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            <View style={{ height: 8 }} />
+          </>
+        )}
 
         {/* Recent sales */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ventes récentes</Text>
@@ -174,4 +206,12 @@ const styles = StyleSheet.create({
   venteAmt: { fontSize: 14, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   creditBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   creditBadgeText: { fontSize: 11, color: '#ef4444', fontFamily: 'Inter_500Medium' },
+  alertsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 8 },
+  alertsTitle: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  alertRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 12, marginBottom: 6, borderLeftWidth: 3 },
+  alertLeft: { flex: 1, gap: 2 },
+  alertName: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  alertMeta: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  alertBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  alertBadgeText: { fontSize: 12, fontWeight: '700', fontFamily: 'Inter_700Bold' },
 });
