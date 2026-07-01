@@ -15,7 +15,7 @@ import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 const INIT_FORM = () => ({
   client: '', quantite: '1', dateVente: getTodayISO(),
-  estCredit: false, montantPaye: '',
+  estCredit: false, montantPaye: '', prixVente: '',
 });
 
 interface SuccessData {
@@ -48,6 +48,15 @@ export default function VentesScreen() {
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
   const reset = () => { setSelectedAchatId(''); setForm(INIT_FORM()); setSuccess(null); };
 
+  const selectArticle = (achatId: string) => {
+    setSelectedAchatId(achatId);
+    const item = stockList.find(s => s.achat.id === achatId);
+    if (item && item.achat.prixVente > 0) {
+      set('prixVente', String(item.achat.prixVente));
+    }
+    setPickerVisible(false);
+  };
+
   const submit = async () => {
     if (!selectedAchatId || !selectedStock) {
       Alert.alert('Article requis', 'Sélectionnez un article à vendre.');
@@ -62,12 +71,9 @@ export default function VentesScreen() {
       Alert.alert('Date invalide', 'Utilisez le format AAAA-MM-JJ.');
       return;
     }
-    const prixU = selectedStock.achat.prixVente;
+    const prixU = parseFloat(form.prixVente);
     if (!prixU || prixU <= 0) {
-      Alert.alert(
-        'Prix de vente non défini',
-        'Définissez le prix de vente de cet article dans le Stock avant de le vendre.',
-      );
+      Alert.alert('Prix invalide', 'Saisissez un prix de vente valide.');
       return;
     }
     const total = prixU * qty;
@@ -121,7 +127,8 @@ export default function VentesScreen() {
   };
 
   const c = colors;
-  const total = selectedStock ? selectedStock.achat.prixVente * (parseInt(form.quantite) || 1) : 0;
+  const prixSaisi = parseFloat(form.prixVente) || 0;
+  const total = selectedStock ? prixSaisi * (parseInt(form.quantite) || 1) : 0;
   const topPad = Platform.OS === 'web' ? insets.top + 67 : insets.top + 16;
 
   return (
@@ -219,12 +226,22 @@ export default function VentesScreen() {
           </TouchableOpacity>
 
           {selectedStock && (
-            <View style={[s.priceInfo, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.25)' }]}>
+            <View style={[s.priceInfo, { backgroundColor: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.2)' }]}>
               <Text style={[s.priceInfoText, { color: c.primary }]}>
-                Prix unitaire: {formatCFA(selectedStock.achat.prixVente)}  ·  Stock dispo: {selectedStock.quantiteRestante}
+                Prix achat: {formatCFA(selectedStock.achat.prixAchat)}  ·  Stock dispo: {selectedStock.quantiteRestante}
+                {selectedStock.achat.prixVente > 0 ? `  ·  Prix suggéré: ${formatCFA(selectedStock.achat.prixVente)}` : ''}
               </Text>
             </View>
           )}
+
+          <Field
+            label="PRIX DE VENTE UNITAIRE (FCFA) *"
+            placeholder="Ex: 15000"
+            value={form.prixVente}
+            onChangeText={v => set('prixVente', v)}
+            keyboardType="numeric"
+            colors={c}
+          />
 
           <Field label="QUANTITÉ *" placeholder="1" value={form.quantite} onChangeText={v => set('quantite', v)} keyboardType="numeric" colors={c} />
           <Field label="CLIENT (OPTIONNEL)" placeholder="Nom du client" value={form.client} onChangeText={v => set('client', v)} colors={c} />
@@ -307,7 +324,7 @@ export default function VentesScreen() {
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={[s.stockRow, { borderColor: c.border }, selectedAchatId === item.achat.id && { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: c.primary }]}
-                    onPress={() => { setSelectedAchatId(item.achat.id); setPickerVisible(false); }}
+                    onPress={() => selectArticle(item.achat.id)}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[s.stockName, { color: c.foreground }]}>{item.achat.modele}</Text>
