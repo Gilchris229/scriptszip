@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate } from '@/utils';
@@ -10,15 +10,31 @@ import { downloadReceiptPDF, shareViaWhatsApp } from '@/utils/pdfReceipt';
 
 type Tab = 'achats' | 'ventes';
 
+type UnifiedVente =
+  | { kind: 'vente'; data: ReturnType<typeof useStore>['ventes'][number] }
+  | { kind: 'credit'; data: ReturnType<typeof useStore>['ventesCredit'][number] };
+
 export default function HistoriqueScreen() {
   const colors = useColors();
-  const { achats, ventes, reglages } = useStore();
+  const { achats, ventes, ventesCredit, reglages } = useStore();
   const [tab, setTab] = useState<Tab>('ventes');
   const [downloading, setDownloading] = useState<string | null>(null);
   const c = colors;
 
-  const sortedAchats = useMemo(() => [...achats].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [achats]);
-  const sortedVentes = useMemo(() => [...ventes].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [ventes]);
+  const sortedAchats = useMemo(
+    () => [...achats].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [achats]
+  );
+
+  const unifiedVentes = useMemo<UnifiedVente[]>(() => {
+    const regular: UnifiedVente[] = ventes.map(v => ({ kind: 'vente', data: v }));
+    const credits: UnifiedVente[] = ventesCredit.map(vc => ({ kind: 'credit', data: vc }));
+    return [...regular, ...credits].sort((a, b) => {
+      const dateA = a.kind === 'vente' ? a.data.createdAt : a.data.createdAt;
+      const dateB = b.kind === 'vente' ? b.data.createdAt : b.data.createdAt;
+      return dateB.localeCompare(dateA);
+    });
+  }, [ventes, ventesCredit]);
 
   const handleDownloadPDF = async (vente: typeof ventes[number]) => {
     if (downloading) return;
@@ -38,6 +54,33 @@ export default function HistoriqueScreen() {
     await shareViaWhatsApp(vente, achat, reglages);
   };
 
+  const handleCreditWhatsApp = async (vc: typeof ventesCredit[number]) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const montantPaye = vc.prixTotal - vc.resteAPayer;
+    const text =
+      `🛍️ *${reglages.nomBoutique}*` +
+      `${reglages.telephone ? '\n📞 ' + reglages.telephone : ''}` +
+      `\n\n*Reçu crédit — ${vc.id}*` +
+      `\n👤 Client : ${vc.clientNom}` +
+      `\n📞 ${vc.clientTelephone}` +
+      `\n📍 ${vc.clientAdresse}` +
+      `\n\n👟 ${vc.modele} — P${vc.pointure} · ${vc.couleur} · ×${vc.quantite}` +
+      `\n\n💰 Total : ${formatCFA(vc.prixTotal)}` +
+      `\n✅ Payé : ${formatCFA(montantPaye)}` +
+      `\n⏳ Reste : ${vc.resteAPayer > 0 ? formatCFA(vc.resteAPayer) : 'Soldé'}` +
+      `\n\n📅 Échéance : ${formatDate(vc.dateEcheance)}` +
+      `\n\nMerci de votre confiance 🙏`;
+    const encoded = encodeURIComponent(text);
+    if (Platform.OS === 'web') {
+      window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    } else {
+      const url = `whatsapp://send?text=${encoded}`;
+      const canOpen = await Linking.canOpenURL(url).catch(() => false);
+      if (canOpen) await Linking.openURL(url);
+      else await Linking.openURL(`https://wa.me/?text=${encoded}`);
+    }
+  };
+
   return (
     <View style={[s.container, { backgroundColor: c.background }]}>
       {/* Tab selector */}
@@ -49,7 +92,7 @@ export default function HistoriqueScreen() {
             onPress={() => setTab(t)}
           >
             <Text style={[s.tabText, { color: tab === t ? '#fff' : c.mutedForeground }]}>
-              {t === 'ventes' ? 'Ventes' : 'Achats'}
+              {t === 'ventes' ? `Ventes (${unifiedVentes.length})` : `Achats (${sortedAchats.length})`}
             </Text>
           </TouchableOpacity>
         ))}
@@ -57,60 +100,110 @@ export default function HistoriqueScreen() {
 
       {tab === 'ventes' ? (
         <FlatList
-          data={sortedVentes}
-          keyExtractor={i => i.id}
+          data={unifiedVentes}
+          keyExtractor={i => i.data.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.list}
           ListEmptyComponent={<EmptyState icon="bag-outline" text="Aucune vente enregistrée" colors={c} />}
-          renderItem={({ item: v }) => (
-            <View style={[s.card, { backgroundColor: c.card }]}>
-              <View style={s.cardRow}>
-                <View style={[s.icon, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-                  <Ionicons name="bag" size={18} color={c.primary} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={[s.name, { color: c.foreground }]}>{v.modele}</Text>
-                  <Text style={[s.meta, { color: c.mutedForeground }]}>
-                    P{v.pointure} · {v.couleur} · ×{v.quantite}
-                    {v.client ? ` · ${v.client}` : ''}
-                  </Text>
-                  <Text style={[s.date, { color: c.mutedForeground }]}>{formatDate(v.dateVente)}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                  <Text style={[s.amount, { color: c.primary }]}>{formatCFA(v.montantTotal)}</Text>
-                  {v.estCredit && (
-                    <View style={[s.badge, { backgroundColor: v.resteAPayer > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)' }]}>
-                      <Text style={[s.badgeText, { color: v.resteAPayer > 0 ? '#ef4444' : '#22c55e' }]}>
-                        {v.resteAPayer > 0 ? 'Crédit' : 'Soldé'}
-                      </Text>
+          renderItem={({ item }) => {
+            if (item.kind === 'vente') {
+              const v = item.data;
+              return (
+                <View style={[s.card, { backgroundColor: c.card }]}>
+                  <View style={s.cardRow}>
+                    <View style={[s.icon, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
+                      <Ionicons name="bag" size={18} color={c.primary} />
                     </View>
-                  )}
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity
-                      style={[s.pdfBtn, { backgroundColor: downloading === v.id ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.25)' }]}
-                      onPress={() => handleDownloadPDF(v)}
-                      disabled={!!downloading}
-                    >
-                      <Ionicons
-                        name={downloading === v.id ? 'hourglass-outline' : 'document-outline'}
-                        size={12}
-                        color={c.primary}
-                      />
-                      <Text style={[s.pdfBtnText, { color: c.primary }]}>
-                        {downloading === v.id ? '...' : 'PDF'}
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={[s.name, { color: c.foreground }]}>{v.modele}</Text>
+                      <Text style={[s.meta, { color: c.mutedForeground }]}>
+                        P{v.pointure} · {v.couleur} · ×{v.quantite}
+                        {v.client ? ` · ${v.client}` : ''}
                       </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[s.pdfBtn, { backgroundColor: 'rgba(37,211,102,0.12)', borderColor: 'rgba(37,211,102,0.3)' }]}
-                      onPress={() => handleWhatsApp(v)}
-                    >
-                      <Ionicons name="logo-whatsapp" size={12} color="#25D366" />
-                    </TouchableOpacity>
+                      <Text style={[s.date, { color: c.mutedForeground }]}>{formatDate(v.dateVente)}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <Text style={[s.amount, { color: c.primary }]}>{formatCFA(v.montantTotal)}</Text>
+                      {v.estCredit && (
+                        <View style={[s.badge, { backgroundColor: v.resteAPayer > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)' }]}>
+                          <Text style={[s.badgeText, { color: v.resteAPayer > 0 ? '#ef4444' : '#22c55e' }]}>
+                            {v.resteAPayer > 0 ? 'Crédit' : 'Soldé'}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={s.btnRow}>
+                        <TouchableOpacity
+                          style={[s.pdfBtn, { backgroundColor: downloading === v.id ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.25)' }]}
+                          onPress={() => handleDownloadPDF(v)}
+                          disabled={!!downloading}
+                        >
+                          <Ionicons name={downloading === v.id ? 'hourglass-outline' : 'document-outline'} size={12} color={c.primary} />
+                          <Text style={[s.pdfBtnText, { color: c.primary }]}>{downloading === v.id ? '...' : 'PDF'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[s.pdfBtn, { backgroundColor: 'rgba(37,211,102,0.12)', borderColor: 'rgba(37,211,102,0.3)' }]}
+                          onPress={() => handleWhatsApp(v)}
+                        >
+                          <Ionicons name="logo-whatsapp" size={12} color="#25D366" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </View>
-          )}
+              );
+            }
+
+            const vc = item.data;
+            const isPaid = vc.statut === 'solde';
+            return (
+              <TouchableOpacity
+                style={[s.card, { backgroundColor: c.card, borderLeftWidth: 3, borderLeftColor: isPaid ? '#22c55e' : '#f97316' }]}
+                onPress={() => router.push(`/recu-credit/${vc.id}` as any)}
+                activeOpacity={0.8}
+              >
+                <View style={s.cardRow}>
+                  <View style={[s.icon, { backgroundColor: 'rgba(249,115,22,0.12)' }]}>
+                    <Ionicons name="card" size={18} color="#f97316" />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[s.name, { color: c.foreground }]}>{vc.modele}</Text>
+                      <View style={[s.badge, { backgroundColor: 'rgba(249,115,22,0.12)' }]}>
+                        <Text style={[s.badgeText, { color: '#f97316' }]}>Crédit</Text>
+                      </View>
+                    </View>
+                    <Text style={[s.meta, { color: c.mutedForeground }]}>
+                      P{vc.pointure} · {vc.couleur} · ×{vc.quantite} · {vc.clientNom}
+                    </Text>
+                    <Text style={[s.date, { color: c.mutedForeground }]}>{formatDate(vc.dateVente)} · Éch. {formatDate(vc.dateEcheance)}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Text style={[s.amount, { color: '#f97316' }]}>{formatCFA(vc.prixTotal)}</Text>
+                    <View style={[s.badge, { backgroundColor: isPaid ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)' }]}>
+                      <Text style={[s.badgeText, { color: isPaid ? '#22c55e' : '#ef4444' }]}>
+                        {isPaid ? 'Soldé' : `Reste: ${formatCFA(vc.resteAPayer)}`}
+                      </Text>
+                    </View>
+                    <View style={s.btnRow}>
+                      <TouchableOpacity
+                        style={[s.pdfBtn, { backgroundColor: 'rgba(249,115,22,0.10)', borderColor: 'rgba(249,115,22,0.3)' }]}
+                        onPress={() => router.push(`/recu-credit/${vc.id}` as any)}
+                      >
+                        <Ionicons name="receipt-outline" size={12} color="#f97316" />
+                        <Text style={[s.pdfBtnText, { color: '#f97316' }]}>Reçu</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[s.pdfBtn, { backgroundColor: 'rgba(37,211,102,0.12)', borderColor: 'rgba(37,211,102,0.3)' }]}
+                        onPress={() => handleCreditWhatsApp(vc)}
+                      >
+                        <Ionicons name="logo-whatsapp" size={12} color="#25D366" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
       ) : (
         <FlatList
@@ -159,7 +252,7 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   tabs: { flexDirection: 'row', margin: 16, borderRadius: 10, padding: 4, borderWidth: 1 },
   tab: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  tabText: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  tabText: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
   list: { paddingHorizontal: 16, paddingBottom: Platform.OS === 'web' ? 60 : 40 },
   card: { borderRadius: 12, padding: 14, marginBottom: 8 },
   cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
@@ -170,6 +263,7 @@ const s = StyleSheet.create({
   amount: { fontSize: 14, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   badgeText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  btnRow: { flexDirection: 'row', gap: 6 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   pdfBtnText: { fontSize: 11, fontWeight: '700', fontFamily: 'Inter_700Bold' },
 });
