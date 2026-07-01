@@ -1,4 +1,4 @@
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import { formatCFA, formatDate } from '@/utils';
 
 export function buildReceiptHTML(vente: any, achat: any | undefined, reglages: any): string {
@@ -27,6 +27,7 @@ export function buildReceiptHTML(vente: any, achat: any | undefined, reglages: a
     .status-credit{background:#fef2f2;color:#dc2626}
     .footer{text-align:center;margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:12px;color:#999}
     .id{font-size:10px;color:#bbb;text-align:center;margin-top:4px}
+    @media print{body{padding:0}}
   </style></head><body>
     <div class="header">
       <div class="shop">${escHtml(reglages.nomBoutique)}</div>
@@ -68,6 +69,29 @@ export function buildReceiptHTML(vente: any, achat: any | undefined, reglages: a
   </body></html>`;
 }
 
+function buildReceiptText(vente: any, reglages: any): string {
+  const status = vente.estCredit && vente.resteAPayer > 0
+    ? `⏳ Crédit en cours\nMontant payé : ${formatCFA(vente.montantPaye)}\nReste à payer : ${formatCFA(vente.resteAPayer)}`
+    : '✅ Paiement reçu';
+
+  return `🛍️ *${reglages.nomBoutique}*${reglages.telephone ? '\n📞 ' + reglages.telephone : ''}${reglages.adresse ? '\n📍 ' + reglages.adresse : ''}
+
+*Reçu de vente*
+📅 Date : ${formatDate(vente.dateVente)}
+👤 Client : ${vente.client || 'Anonyme'}
+
+👟 Article : ${vente.modele}
+   Pointure ${vente.pointure} · ${vente.couleur}
+   Qté : ×${vente.quantite}
+
+💰 Prix unitaire : ${formatCFA(vente.prixUnitaire)}
+*TOTAL : ${formatCFA(vente.montantTotal)}*
+
+${status}
+
+Merci pour votre achat ! 🙏`;
+}
+
 function escHtml(str: string): string {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -77,14 +101,26 @@ function escHtml(str: string): string {
 }
 
 export async function downloadReceiptPDF(vente: any, achat: any | undefined, reglages: any): Promise<void> {
+  const html = buildReceiptHTML(vente, achat, reglages);
+
   if (Platform.OS === 'web') {
-    Alert.alert('Non disponible', 'Le téléchargement PDF est disponible uniquement sur mobile (iOS / Android).');
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+      }, 400);
+    } else {
+      Alert.alert('Bloqué', 'Autorisez les pop-ups pour télécharger le PDF.');
+    }
     return;
   }
+
   try {
     const Print = await import('expo-print');
     const Sharing = await import('expo-sharing');
-    const html = buildReceiptHTML(vente, achat, reglages);
     const { uri } = await Print.printToFileAsync({ html, base64: false });
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, {
@@ -93,9 +129,32 @@ export async function downloadReceiptPDF(vente: any, achat: any | undefined, reg
         dialogTitle: `Reçu — ${vente.modele}`,
       });
     } else {
-      Alert.alert('Partage indisponible', 'Le partage de fichiers n\'est pas disponible sur cet appareil.');
+      Alert.alert('Partage indisponible', "Le partage de fichiers n'est pas disponible sur cet appareil.");
     }
   } catch {
     Alert.alert('Erreur', 'La génération du PDF a échoué.');
+  }
+}
+
+export async function shareViaWhatsApp(vente: any, achat: any | undefined, reglages: any): Promise<void> {
+  const text = buildReceiptText(vente, reglages);
+  const encoded = encodeURIComponent(text);
+
+  if (Platform.OS === 'web') {
+    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    return;
+  }
+
+  const waUrl = `whatsapp://send?text=${encoded}`;
+  try {
+    const canOpen = await Linking.canOpenURL(waUrl);
+    if (canOpen) {
+      await Linking.openURL(waUrl);
+    } else {
+      const webUrl = `https://wa.me/?text=${encoded}`;
+      await Linking.openURL(webUrl);
+    }
+  } catch {
+    Alert.alert('WhatsApp', "WhatsApp n'est pas installé sur cet appareil.");
   }
 }

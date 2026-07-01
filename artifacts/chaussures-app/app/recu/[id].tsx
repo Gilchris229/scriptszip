@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate } from '@/utils';
-import { buildReceiptHTML, downloadReceiptPDF } from '@/utils/pdfReceipt';
+import { buildReceiptHTML, downloadReceiptPDF, shareViaWhatsApp } from '@/utils/pdfReceipt';
 
 export default function RecuScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,10 +37,16 @@ export default function RecuScreen() {
     }
   };
 
-  const shareHTML = async () => {
+  const sharePDF = async () => {
     if (!vente) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await downloadReceiptPDF(vente, achat, reglages);
+  };
+
+  const shareWhatsApp = async () => {
+    if (!vente) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await shareViaWhatsApp(vente, achat, reglages);
   };
 
   if (!vente) {
@@ -139,11 +145,15 @@ export default function RecuScreen() {
             <Ionicons name="print-outline" size={20} color={c.foreground} />
             <Text style={[s.actionText, { color: c.foreground }]}>Imprimer</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.actionBtn, { backgroundColor: c.primary }]} onPress={shareHTML}>
-            <Ionicons name="share-outline" size={20} color="#fff" />
-            <Text style={[s.actionText, { color: '#fff' }]}>Partager PDF</Text>
+          <TouchableOpacity style={[s.actionBtn, { backgroundColor: c.primary }]} onPress={sharePDF}>
+            <Ionicons name="document-outline" size={20} color="#fff" />
+            <Text style={[s.actionText, { color: '#fff' }]}>Télécharger PDF</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity style={[s.whatsappBtn]} onPress={shareWhatsApp}>
+          <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+          <Text style={[s.actionText, { color: '#fff' }]}>Partager sur WhatsApp</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={[s.doneBtn, { borderColor: c.border }]} onPress={() => router.replace('/(tabs)/index' as any)}>
           <Text style={[s.doneText, { color: c.mutedForeground }]}>Retour à l'accueil</Text>
@@ -201,6 +211,7 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1 },
   actionText: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  whatsappBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: '#25D366', marginTop: 10 },
   doneBtn: { marginTop: 10, paddingVertical: 13, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   doneText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate } from '@/utils';
-import { downloadReceiptPDF } from '@/utils/pdfReceipt';
+import { downloadReceiptPDF, shareViaWhatsApp } from '@/utils/pdfReceipt';
 
 type Tab = 'achats' | 'ventes';
 
@@ -30,6 +30,12 @@ export default function HistoriqueScreen() {
     } finally {
       setDownloading(null);
     }
+  };
+
+  const handleWhatsApp = async (vente: typeof ventes[number]) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const achat = achats.find(a => a.id === vente.achatId);
+    await shareViaWhatsApp(vente, achat, reglages);
   };
 
   return (
@@ -79,14 +85,14 @@ export default function HistoriqueScreen() {
                       </Text>
                     </View>
                   )}
-                  {Platform.OS !== 'web' && (
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
                     <TouchableOpacity
                       style={[s.pdfBtn, { backgroundColor: downloading === v.id ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.25)' }]}
                       onPress={() => handleDownloadPDF(v)}
                       disabled={!!downloading}
                     >
                       <Ionicons
-                        name={downloading === v.id ? 'hourglass-outline' : 'download-outline'}
+                        name={downloading === v.id ? 'hourglass-outline' : 'document-outline'}
                         size={12}
                         color={c.primary}
                       />
@@ -94,7 +100,13 @@ export default function HistoriqueScreen() {
                         {downloading === v.id ? '...' : 'PDF'}
                       </Text>
                     </TouchableOpacity>
-                  )}
+                    <TouchableOpacity
+                      style={[s.pdfBtn, { backgroundColor: 'rgba(37,211,102,0.12)', borderColor: 'rgba(37,211,102,0.3)' }]}
+                      onPress={() => handleWhatsApp(v)}
+                    >
+                      <Ionicons name="logo-whatsapp" size={12} color="#25D366" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </View>
