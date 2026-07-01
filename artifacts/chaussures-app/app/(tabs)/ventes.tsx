@@ -234,41 +234,11 @@ export default function VentesScreen() {
           <Field label="CLIENT (OPTIONNEL)" placeholder="Nom du client" value={form.client} onChangeText={v => set('client', v)} colors={c} />
           <Field label="DATE DE VENTE" placeholder="AAAA-MM-JJ" value={form.dateVente} onChangeText={v => set('dateVente', v)} colors={c} />
 
-          {/* Credit toggle */}
-          <View style={s.toggleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.toggleLabel, { color: c.foreground }]}>Vente à crédit</Text>
-              <Text style={[s.toggleSub, { color: c.mutedForeground }]}>Le client paye en plusieurs fois</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => set('estCredit', !form.estCredit)}
-              style={[s.toggle, { backgroundColor: form.estCredit ? c.primary : c.card, borderColor: form.estCredit ? c.primary : c.border }]}
-            >
-              <View style={[s.toggleThumb, { transform: [{ translateX: form.estCredit ? 18 : 2 }] }]} />
-            </TouchableOpacity>
-          </View>
-
-          {form.estCredit && (
-            <Field
-              label="MONTANT PAYÉ MAINTENANT (FCFA)"
-              placeholder={`0 à ${total}`}
-              value={form.montantPaye}
-              onChangeText={v => set('montantPaye', v)}
-              keyboardType="numeric"
-              colors={c}
-            />
-          )}
-
           {/* Total preview */}
           {selectedStock && (
             <View style={[s.totalBox, { backgroundColor: c.card }]}>
               <Text style={[s.totalLabel, { color: c.mutedForeground }]}>Total à payer</Text>
               <Text style={[s.totalValue, { color: c.primary }]}>{formatCFA(total)}</Text>
-              {form.estCredit && parseFloat(form.montantPaye) > 0 && (
-                <Text style={[s.totalSub, { color: '#ef4444' }]}>
-                  Reste: {formatCFA(Math.max(0, total - parseFloat(form.montantPaye)))}
-                </Text>
-              )}
             </View>
           )}
 
