@@ -100,21 +100,27 @@ function escHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function printHtmlOnWeb(html: string): void {
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;left:0;top:0;opacity:0';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow?.document;
+  if (!doc) { document.body.removeChild(iframe); return; }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  setTimeout(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 2000);
+  }, 500);
+}
+
 export async function downloadReceiptPDF(vente: any, achat: any | undefined, reglages: any): Promise<void> {
   const html = buildReceiptHTML(vente, achat, reglages);
 
   if (Platform.OS === 'web') {
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => {
-        win.print();
-      }, 400);
-    } else {
-      Alert.alert('Bloqué', 'Autorisez les pop-ups pour télécharger le PDF.');
-    }
+    printHtmlOnWeb(html);
     return;
   }
 
@@ -235,15 +241,7 @@ export async function downloadCreditReceiptPDF(credit: any, reglages: any): Prom
   const html = buildCreditReceiptHTML(credit, reglages);
 
   if (Platform.OS === 'web') {
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => { win.print(); }, 400);
-    } else {
-      Alert.alert('Bloqué', 'Autorisez les pop-ups pour télécharger le PDF.');
-    }
+    printHtmlOnWeb(html);
     return;
   }
 
