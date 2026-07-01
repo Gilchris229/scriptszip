@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate } from '@/utils';
+import { buildReceiptHTML, downloadReceiptPDF } from '@/utils/pdfReceipt';
 
 export default function RecuScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,11 +29,10 @@ export default function RecuScreen() {
       return;
     }
     try {
-      // Dynamic import for expo-print (not available on web)
       const Print = await import('expo-print');
-      const html = buildHTML(vente, achat, reglages);
+      const html = buildReceiptHTML(vente, achat, reglages);
       await Print.printAsync({ html });
-    } catch (e) {
+    } catch {
       Alert.alert('Erreur', "L'impression n'est pas disponible sur cet appareil.");
     }
   };
@@ -40,23 +40,7 @@ export default function RecuScreen() {
   const shareHTML = async () => {
     if (!vente) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (Platform.OS === 'web') {
-      Alert.alert('Partage', 'La fonction de partage est disponible uniquement sur mobile.');
-      return;
-    }
-    try {
-      const Print = await import('expo-print');
-      const Sharing = await import('expo-sharing');
-      const html = buildHTML(vente, achat, reglages);
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: '.pdf' });
-      } else {
-        Alert.alert('Partage indisponible');
-      }
-    } catch (e) {
-      Alert.alert('Erreur', "Le partage a échoué.");
-    }
+    await downloadReceiptPDF(vente, achat, reglages);
   };
 
   if (!vente) {
@@ -189,36 +173,6 @@ function AmountRow({ label, value, colors: c, big, accent }: { label: string; va
   );
 }
 
-function buildHTML(vente: any, achat: any, reglages: any): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:24px;max-width:320px;margin:auto}
-    .header{text-align:center;padding-bottom:16px;border-bottom:2px solid #ddd;margin-bottom:16px}
-    .shop{font-size:20px;font-weight:bold;margin-bottom:4px}.info{font-size:12px;color:#666;margin-bottom:2px}
-    .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}
-    .label{font-size:12px;color:#888}.value{font-size:12px;font-weight:600}
-    .total{border-top:2px solid #333;margin-top:8px;padding-top:8px}
-    .total .label{font-size:14px;font-weight:bold;color:#333}.total .value{font-size:16px;font-weight:bold}
-    .credit{background:#fff3cd;padding:8px;border-radius:6px;margin-top:12px;font-size:12px}
-    .footer{text-align:center;margin-top:16px;font-size:12px;color:#999}
-  </style></head><body>
-    <div class="header">
-      <div class="shop">${reglages.nomBoutique}</div>
-      ${reglages.telephone ? `<div class="info">${reglages.telephone}</div>` : ''}
-      ${reglages.adresse ? `<div class="info">${reglages.adresse}</div>` : ''}
-    </div>
-    <div class="row"><span class="label">Date</span><span class="value">${formatDate(vente.dateVente)}</span></div>
-    <div class="row"><span class="label">Client</span><span class="value">${vente.client || 'Anonyme'}</span></div>
-    <div class="row"><span class="label">Article</span><span class="value">${vente.modele} (P${vente.pointure}, ${vente.couleur})</span></div>
-    <div class="row"><span class="label">Prix unitaire</span><span class="value">${formatCFA(vente.prixUnitaire)}</span></div>
-    <div class="row"><span class="label">Quantité</span><span class="value">×${vente.quantite}</span></div>
-    <div class="row total"><span class="label">TOTAL</span><span class="value">${formatCFA(vente.montantTotal)}</span></div>
-    ${vente.estCredit ? `<div class="credit">
-      Payé: ${formatCFA(vente.montantPaye)}<br>
-      Reste: ${formatCFA(vente.resteAPayer)}
-    </div>` : ''}
-    <div class="footer">Merci pour votre achat !</div>
-  </body></html>`;
-}
 
 const s = StyleSheet.create({
   container: { flex: 1 },

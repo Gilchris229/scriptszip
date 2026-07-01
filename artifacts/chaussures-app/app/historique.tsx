@@ -1,22 +1,36 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate } from '@/utils';
+import { downloadReceiptPDF } from '@/utils/pdfReceipt';
 
 type Tab = 'achats' | 'ventes';
 
 export default function HistoriqueScreen() {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const { achats, ventes } = useStore();
+  const { achats, ventes, reglages } = useStore();
   const [tab, setTab] = useState<Tab>('ventes');
+  const [downloading, setDownloading] = useState<string | null>(null);
   const c = colors;
 
   const sortedAchats = useMemo(() => [...achats].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [achats]);
   const sortedVentes = useMemo(() => [...ventes].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [ventes]);
+
+  const handleDownloadPDF = async (vente: typeof ventes[number]) => {
+    if (downloading) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDownloading(vente.id);
+    try {
+      const achat = achats.find(a => a.id === vente.achatId);
+      await downloadReceiptPDF(vente, achat, reglages);
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   return (
     <View style={[s.container, { backgroundColor: c.background }]}>
@@ -56,7 +70,7 @@ export default function HistoriqueScreen() {
                   </Text>
                   <Text style={[s.date, { color: c.mutedForeground }]}>{formatDate(v.dateVente)}</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
                   <Text style={[s.amount, { color: c.primary }]}>{formatCFA(v.montantTotal)}</Text>
                   {v.estCredit && (
                     <View style={[s.badge, { backgroundColor: v.resteAPayer > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)' }]}>
@@ -64,6 +78,22 @@ export default function HistoriqueScreen() {
                         {v.resteAPayer > 0 ? 'Crédit' : 'Soldé'}
                       </Text>
                     </View>
+                  )}
+                  {Platform.OS !== 'web' && (
+                    <TouchableOpacity
+                      style={[s.pdfBtn, { backgroundColor: downloading === v.id ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.25)' }]}
+                      onPress={() => handleDownloadPDF(v)}
+                      disabled={!!downloading}
+                    >
+                      <Ionicons
+                        name={downloading === v.id ? 'hourglass-outline' : 'download-outline'}
+                        size={12}
+                        color={c.primary}
+                      />
+                      <Text style={[s.pdfBtnText, { color: c.primary }]}>
+                        {downloading === v.id ? '...' : 'PDF'}
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               </View>
@@ -128,4 +158,6 @@ const s = StyleSheet.create({
   amount: { fontSize: 14, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   badgeText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+  pdfBtnText: { fontSize: 11, fontWeight: '700', fontFamily: 'Inter_700Bold' },
 });
