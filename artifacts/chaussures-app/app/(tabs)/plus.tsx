@@ -9,7 +9,6 @@ import { formatCFA } from '@/utils';
 
 const MENU = [
   { label: 'Historique', sub: 'Achats & ventes', icon: 'time-outline' as const, route: '/historique', accent: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
-  { label: 'Crédit', sub: 'Ventes à crédit', icon: 'wallet-outline' as const, route: '/credit', accent: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   { label: 'Statistiques', sub: 'Analyse des ventes', icon: 'bar-chart-outline' as const, route: '/statistiques', accent: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
   { label: 'Réglages', sub: 'Boutique & profil', icon: 'settings-outline' as const, route: '/reglages', accent: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
 ];
@@ -17,9 +16,9 @@ const MENU = [
 export default function PlusScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getKPIs, ventes, reglages } = useStore();
+  const { getKPIs, ventesCredit, reglages } = useStore();
   const kpis = getKPIs();
-  const creditVentes = ventes.filter(v => v.estCredit && v.resteAPayer > 0);
+  const creditVentes = ventesCredit.filter(vc => vc.statut === 'en_cours');
   const c = colors;
 
   return (
