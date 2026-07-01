@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AlertTriangle } from 'lucide-react-native';
 import { useColors } from '@/hooks/useColors';
@@ -15,10 +14,6 @@ export default function DashboardScreen() {
   const { reglages, ventes, getKPIs } = useStore();
   const { getLowStockItems } = useStockAlerts();
   const [mois, setMois] = useState(getCurrentMonth());
-  const [, forceUpdate] = useState(0);
-
-  // Force re-render each time the tab is focused so KPIs are always up-to-date
-  useFocusEffect(() => { forceUpdate(n => n + 1); });
 
   // Computed fresh every render — no stale memoisation
   const kpis = getKPIs(mois);
