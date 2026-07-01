@@ -34,11 +34,12 @@ function ThemedStack() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="historique" options={{ title: 'Historique' }} />
-      <Stack.Screen name="credit" options={{ title: 'Crédit' }} />
+      <Stack.Screen name="credit" options={{ title: 'Crédit (ancien)' }} />
       <Stack.Screen name="statistiques" options={{ title: 'Statistiques' }} />
       <Stack.Screen name="reglages" options={{ title: 'Réglages' }} />
       <Stack.Screen name="stock/[id]" options={{ title: 'Modifier article' }} />
       <Stack.Screen name="recu/[id]" options={{ title: 'Reçu de vente' }} />
+      <Stack.Screen name="recu-credit/[id]" options={{ title: 'Reçu crédit' }} />
     </Stack>
   );
 }

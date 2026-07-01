@@ -40,6 +40,38 @@ export interface PaiementCredit {
   createdAt: string;
 }
 
+export interface PaiementVenteCredit {
+  id: string;
+  montant: number;
+  date: string;
+}
+
+export interface VenteCredit {
+  id: string; // CRED-XXXX
+  // Client
+  clientNom: string;
+  clientTelephone: string;
+  clientAdresse: string;
+  // Article
+  achatId: string;
+  modele: string;
+  pointure: string;
+  couleur: string;
+  quantite: number;
+  // Montants
+  prixTotal: number;
+  acompte: number;
+  resteAPayer: number;
+  // Dates
+  dateVente: string;
+  dateEcheance: string;
+  // Meta
+  note: string;
+  statut: 'en_cours' | 'solde';
+  paiements: PaiementVenteCredit[];
+  createdAt: string;
+}
+
 export interface Reglages {
   nomBoutique: string;
   telephone: string;
@@ -51,6 +83,7 @@ const KEYS = {
   VENTES: '@chaussures/ventes',
   PAIEMENTS: '@chaussures/paiements',
   REGLAGES: '@chaussures/reglages',
+  VENTES_CREDIT: 'ventes_credit',
 };
 
 const DEFAULT_REGLAGES: Reglages = {
@@ -59,6 +92,14 @@ const DEFAULT_REGLAGES: Reglages = {
   adresse: '',
 };
 
+function genCreditId(existing: VenteCredit[]): string {
+  const max = existing.reduce((m, c) => {
+    const n = parseInt(c.id.replace('CRED-', ''), 10);
+    return isNaN(n) ? m : Math.max(m, n);
+  }, 0);
+  return `CRED-${String(max + 1).padStart(4, '0')}`;
+}
+
 interface KPIs {
   chiffreAffaires: number;
   benefice: number;
@@ -66,6 +107,7 @@ interface KPIs {
   nbVentes: number;
   montantCredit: number;
   nbArticlesStock: number;
+  totalCreances: number;
 }
 
 interface StockItem {
@@ -78,6 +120,7 @@ interface StoreContextValue {
   achats: Achat[];
   ventes: Vente[];
   paiements: PaiementCredit[];
+  ventesCredit: VenteCredit[];
   reglages: Reglages;
   isLoading: boolean;
   getStockForAchat: (achatId: string) => number;
@@ -88,9 +131,12 @@ interface StoreContextValue {
   addVente: (data: Omit<Vente, 'id' | 'createdAt'>) => Promise<Vente>;
   updateVente: (id: string, updates: Partial<Omit<Vente, 'id' | 'createdAt'>>) => Promise<void>;
   addPaiementCredit: (data: Omit<PaiementCredit, 'id' | 'createdAt'>) => Promise<void>;
+  addVenteCredit: (data: Omit<VenteCredit, 'id' | 'statut' | 'paiements' | 'createdAt'>) => Promise<VenteCredit>;
+  addPaiementVenteCredit: (creditId: string, montant: number, date: string) => Promise<void>;
   updateReglages: (updates: Partial<Reglages>) => Promise<void>;
   getKPIs: (month?: string) => KPIs;
   getMonthlyData: () => Array<{ mois: string; ca: number; benefice: number }>;
+  getTotalCreances: () => number;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -99,22 +145,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [achats, setAchats] = useState<Achat[]>([]);
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [paiements, setPaiements] = useState<PaiementCredit[]>([]);
+  const [ventesCredit, setVentesCredit] = useState<VenteCredit[]>([]);
   const [reglages, setReglages] = useState<Reglages>(DEFAULT_REGLAGES);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [a, v, p, r] = await Promise.all([
+        const [a, v, p, r, vc] = await Promise.all([
           AsyncStorage.getItem(KEYS.ACHATS),
           AsyncStorage.getItem(KEYS.VENTES),
           AsyncStorage.getItem(KEYS.PAIEMENTS),
           AsyncStorage.getItem(KEYS.REGLAGES),
+          AsyncStorage.getItem(KEYS.VENTES_CREDIT),
         ]);
         if (a) setAchats(JSON.parse(a));
         if (v) setVentes(JSON.parse(v));
         if (p) setPaiements(JSON.parse(p));
         if (r) setReglages({ ...DEFAULT_REGLAGES, ...JSON.parse(r) });
+        if (vc) setVentesCredit(JSON.parse(vc));
       } catch (e) {
         console.error('Load error:', e);
       } finally {
@@ -133,31 +182,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const savePaiements = useCallback(async (data: PaiementCredit[]) => {
     await AsyncStorage.setItem(KEYS.PAIEMENTS, JSON.stringify(data));
   }, []);
+  const saveVentesCredit = useCallback(async (data: VenteCredit[]) => {
+    await AsyncStorage.setItem(KEYS.VENTES_CREDIT, JSON.stringify(data));
+  }, []);
   const saveReglages = useCallback(async (data: Reglages) => {
     await AsyncStorage.setItem(KEYS.REGLAGES, JSON.stringify(data));
   }, []);
 
+  // Stock calculations include both ventes and ventesCredit quantities
   const getStockForAchat = useCallback((achatId: string): number => {
     const achat = achats.find(a => a.id === achatId);
     if (!achat) return 0;
-    const vendu = ventes
-      .filter(v => v.achatId === achatId)
-      .reduce((sum, v) => sum + v.quantite, 0);
-    return Math.max(0, achat.quantiteAchetee - vendu);
-  }, [achats, ventes]);
+    const vendu = ventes.filter(v => v.achatId === achatId).reduce((sum, v) => sum + v.quantite, 0);
+    const venduCredit = ventesCredit.filter(vc => vc.achatId === achatId).reduce((sum, vc) => sum + vc.quantite, 0);
+    return Math.max(0, achat.quantiteAchetee - vendu - venduCredit);
+  }, [achats, ventes, ventesCredit]);
 
   const getStockList = useCallback((): StockItem[] => {
     return achats.map(achat => {
-      const quantiteVendue = ventes
-        .filter(v => v.achatId === achat.id)
-        .reduce((sum, v) => sum + v.quantite, 0);
+      const quantiteVendue =
+        ventes.filter(v => v.achatId === achat.id).reduce((sum, v) => sum + v.quantite, 0) +
+        ventesCredit.filter(vc => vc.achatId === achat.id).reduce((sum, vc) => sum + vc.quantite, 0);
       return {
         achat,
         quantiteVendue,
         quantiteRestante: Math.max(0, achat.quantiteAchetee - quantiteVendue),
       };
     });
-  }, [achats, ventes]);
+  }, [achats, ventes, ventesCredit]);
 
   const addAchat = useCallback(async (data: Omit<Achat, 'id' | 'createdAt'>): Promise<Achat> => {
     const achat: Achat = { ...data, id: genId(), createdAt: new Date().toISOString() };
@@ -180,7 +232,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const updatedVentes = ventes.filter(v => v.achatId !== id);
     setVentes(updatedVentes);
     await saveVentes(updatedVentes);
-  }, [achats, ventes, saveAchats, saveVentes]);
+    const updatedVC = ventesCredit.filter(vc => vc.achatId !== id);
+    setVentesCredit(updatedVC);
+    await saveVentesCredit(updatedVC);
+  }, [achats, ventes, ventesCredit, saveAchats, saveVentes, saveVentesCredit]);
 
   const addVente = useCallback(async (data: Omit<Vente, 'id' | 'createdAt'>): Promise<Vente> => {
     const vente: Vente = { ...data, id: genId(), createdAt: new Date().toISOString() };
@@ -201,7 +256,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const updatedP = [paiement, ...paiements];
     setPaiements(updatedP);
     await savePaiements(updatedP);
-    // Update the related vente
     const vente = ventes.find(v => v.id === data.venteId);
     if (vente) {
       const newMontantPaye = Math.min(vente.montantPaye + data.montant, vente.montantTotal);
@@ -210,11 +264,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [paiements, ventes, savePaiements, updateVente]);
 
+  const addVenteCredit = useCallback(async (
+    data: Omit<VenteCredit, 'id' | 'statut' | 'paiements' | 'createdAt'>
+  ): Promise<VenteCredit> => {
+    const credit: VenteCredit = {
+      ...data,
+      id: genCreditId(ventesCredit),
+      statut: data.resteAPayer > 0 ? 'en_cours' : 'solde',
+      paiements: data.acompte > 0
+        ? [{ id: genId(), montant: data.acompte, date: data.dateVente }]
+        : [],
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [credit, ...ventesCredit];
+    setVentesCredit(updated);
+    await saveVentesCredit(updated);
+    return credit;
+  }, [ventesCredit, saveVentesCredit]);
+
+  const addPaiementVenteCredit = useCallback(async (creditId: string, montant: number, date: string) => {
+    const updated = ventesCredit.map(vc => {
+      if (vc.id !== creditId) return vc;
+      const newReste = Math.max(0, vc.resteAPayer - montant);
+      const newPaiement: PaiementVenteCredit = { id: genId(), montant, date };
+      return {
+        ...vc,
+        resteAPayer: newReste,
+        statut: (newReste === 0 ? 'solde' : 'en_cours') as VenteCredit['statut'],
+        paiements: [newPaiement, ...vc.paiements],
+      };
+    });
+    setVentesCredit(updated);
+    await saveVentesCredit(updated);
+  }, [ventesCredit, saveVentesCredit]);
+
   const updateReglages = useCallback(async (updates: Partial<Reglages>) => {
     const updated = { ...reglages, ...updates };
     setReglages(updated);
     await saveReglages(updated);
   }, [reglages, saveReglages]);
+
+  const getTotalCreances = useCallback((): number => {
+    return ventesCredit.filter(vc => vc.statut === 'en_cours').reduce((s, vc) => s + vc.resteAPayer, 0);
+  }, [ventesCredit]);
 
   const getKPIs = useCallback((month?: string): KPIs => {
     const filteredVentes = month ? ventes.filter(v => v.dateVente.startsWith(month)) : ventes;
@@ -229,11 +321,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const nbVentes = filteredVentes.length;
     const montantCredit = ventes.reduce((sum, v) => sum + (v.resteAPayer || 0), 0);
     const nbArticlesStock = achats.reduce((sum, a) => {
-      const vendu = ventes.filter(v => v.achatId === a.id).reduce((s, v) => s + v.quantite, 0);
+      const vendu =
+        ventes.filter(v => v.achatId === a.id).reduce((s, v) => s + v.quantite, 0) +
+        ventesCredit.filter(vc => vc.achatId === a.id).reduce((s, vc) => s + vc.quantite, 0);
       return sum + Math.max(0, a.quantiteAchetee - vendu);
     }, 0);
-    return { chiffreAffaires, benefice, totalAchats, nbVentes, montantCredit, nbArticlesStock };
-  }, [achats, ventes]);
+    const totalCreances = ventesCredit.filter(vc => vc.statut === 'en_cours').reduce((s, vc) => s + vc.resteAPayer, 0);
+    return { chiffreAffaires, benefice, totalAchats, nbVentes, montantCredit, nbArticlesStock, totalCreances };
+  }, [achats, ventes, ventesCredit]);
 
   const getMonthlyData = useCallback(() => {
     const now = new Date();
@@ -251,21 +346,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [achats, ventes]);
 
   const value = useMemo<StoreContextValue>(() => ({
-    achats, ventes, paiements, reglages, isLoading,
+    achats, ventes, paiements, ventesCredit, reglages, isLoading,
     getStockForAchat, getStockList,
     addAchat, updateAchat, deleteAchat,
     addVente, updateVente,
     addPaiementCredit,
+    addVenteCredit, addPaiementVenteCredit,
     updateReglages,
-    getKPIs, getMonthlyData,
+    getKPIs, getMonthlyData, getTotalCreances,
   }), [
-    achats, ventes, paiements, reglages, isLoading,
+    achats, ventes, paiements, ventesCredit, reglages, isLoading,
     getStockForAchat, getStockList,
     addAchat, updateAchat, deleteAchat,
     addVente, updateVente,
     addPaiementCredit,
+    addVenteCredit, addPaiementVenteCredit,
     updateReglages,
-    getKPIs, getMonthlyData,
+    getKPIs, getMonthlyData, getTotalCreances,
   ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

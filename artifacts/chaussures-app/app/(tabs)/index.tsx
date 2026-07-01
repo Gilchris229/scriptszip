@@ -44,12 +44,30 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* KPI grid */}
+        {/* KPI grid — 4 standard cards */}
         <View style={styles.kpiGrid}>
           <KpiCard label="Chiffre d'affaires" value={formatCFA(kpis.chiffreAffaires)} icon="trending-up" accent="#22c55e" accentBg="rgba(34,197,94,0.12)" colors={colors} />
           <KpiCard label="Bénéfice net" value={formatCFA(kpis.benefice)} icon="cash-outline" accent={colors.primary} accentBg="rgba(99,102,241,0.12)" colors={colors} />
           <KpiCard label="Articles en stock" value={String(kpis.nbArticlesStock)} icon="cube-outline" accent="#f59e0b" accentBg="rgba(245,158,11,0.12)" colors={colors} />
           <KpiCard label="Crédit encours" value={formatCFA(kpis.montantCredit)} icon="time-outline" accent="#ef4444" accentBg="rgba(239,68,68,0.12)" colors={colors} />
+        </View>
+
+        {/* 5th card — Créances (full-width, orange) */}
+        <View style={[styles.creancesCard, { backgroundColor: colors.card }]}>
+          <View style={[styles.creancesIcon, { backgroundColor: 'rgba(249,115,22,0.15)' }]}>
+            <Ionicons name="card-outline" size={22} color="#f97316" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.creancesLabel, { color: colors.mutedForeground }]}>Créances (ventes à crédit)</Text>
+            <Text style={[styles.creancesValue, { color: '#f97316' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {formatCFA(kpis.totalCreances)}
+            </Text>
+          </View>
+          <View style={[styles.creancesBadge, { backgroundColor: kpis.totalCreances > 0 ? 'rgba(249,115,22,0.12)' : 'rgba(34,197,94,0.12)' }]}>
+            <Text style={[styles.creancesBadgeText, { color: kpis.totalCreances > 0 ? '#f97316' : '#22c55e' }]}>
+              {kpis.totalCreances > 0 ? 'À récupérer' : 'Tout soldé'}
+            </Text>
+          </View>
         </View>
 
         {/* Recent sales */}
@@ -124,7 +142,13 @@ const styles = StyleSheet.create({
   arrowBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   monthLabel: { fontSize: 15, fontWeight: '600', fontFamily: 'Inter_600SemiBold', minWidth: 150, textAlign: 'center' },
   scroll: { paddingHorizontal: 16 },
-  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
+  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
+  creancesCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 14, marginBottom: 20 },
+  creancesIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  creancesLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 2 },
+  creancesValue: { fontSize: 20, fontWeight: '700', fontFamily: 'Inter_700Bold' },
+  creancesBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  creancesBadgeText: { fontSize: 11, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
   sectionTitle: { fontSize: 16, fontWeight: '600', fontFamily: 'Inter_600SemiBold', marginBottom: 10 },
   empty: { alignItems: 'center', gap: 10, paddingVertical: 40 },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular' },

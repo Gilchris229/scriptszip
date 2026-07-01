@@ -28,6 +28,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'shippingbox', selected: 'shippingbox.fill' }} />
         <Label>Stock</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="credits">
+        <Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} />
+        <Label>Crédit</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plus">
         <Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} />
         <Label>Plus</Label>
@@ -69,6 +73,7 @@ function ClassicTabLayout() {
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
+        tabBarLabelStyle: { fontSize: 10 },
       }}
     >
       <Tabs.Screen
@@ -77,8 +82,8 @@ function ClassicTabLayout() {
           title: 'Accueil',
           tabBarIcon: ({ color }) =>
             isIOS
-              ? <SymbolView name="house" tintColor={color} size={24} />
-              : <Ionicons name="home-outline" size={22} color={color} />,
+              ? <SymbolView name="house" tintColor={color} size={22} />
+              : <Ionicons name="home-outline" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -87,8 +92,8 @@ function ClassicTabLayout() {
           title: 'Achats',
           tabBarIcon: ({ color }) =>
             isIOS
-              ? <SymbolView name="cart" tintColor={color} size={24} />
-              : <Ionicons name="cart-outline" size={22} color={color} />,
+              ? <SymbolView name="cart" tintColor={color} size={22} />
+              : <Ionicons name="cart-outline" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -97,8 +102,8 @@ function ClassicTabLayout() {
           title: 'Ventes',
           tabBarIcon: ({ color }) =>
             isIOS
-              ? <SymbolView name="bag" tintColor={color} size={24} />
-              : <Ionicons name="bag-outline" size={22} color={color} />,
+              ? <SymbolView name="bag" tintColor={color} size={22} />
+              : <Ionicons name="bag-outline" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -107,8 +112,19 @@ function ClassicTabLayout() {
           title: 'Stock',
           tabBarIcon: ({ color }) =>
             isIOS
-              ? <SymbolView name="shippingbox" tintColor={color} size={24} />
-              : <Ionicons name="cube-outline" size={22} color={color} />,
+              ? <SymbolView name="shippingbox" tintColor={color} size={22} />
+              : <Ionicons name="cube-outline" size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="credits"
+        options={{
+          title: 'Crédit',
+          tabBarIcon: ({ color }) =>
+            isIOS
+              ? <SymbolView name="creditcard" tintColor={color} size={22} />
+              : <Ionicons name="card-outline" size={20} color={color} />,
+          tabBarActiveTintColor: '#f97316',
         }}
       />
       <Tabs.Screen
@@ -117,8 +133,8 @@ function ClassicTabLayout() {
           title: 'Plus',
           tabBarIcon: ({ color }) =>
             isIOS
-              ? <SymbolView name="square.grid.2x2" tintColor={color} size={24} />
-              : <Ionicons name="grid-outline" size={22} color={color} />,
+              ? <SymbolView name="square.grid.2x2" tintColor={color} size={22} />
+              : <Ionicons name="grid-outline" size={20} color={color} />,
         }}
       />
     </Tabs>
