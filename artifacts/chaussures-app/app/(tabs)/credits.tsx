@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  Platform, ActivityIndicator, Modal, FlatList, ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Platform, ActivityIndicator, Modal, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,8 +26,6 @@ const INIT_FORM = () => ({
   note: '',
 });
 
-// ─── Utils ────────────────────────────────────────────────────────────────────
-
 function getEcheanceStatus(dateEcheance: string): 'expired' | 'soon' | 'ok' {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -38,7 +36,7 @@ function getEcheanceStatus(dateEcheance: string): 'expired' | 'soon' | 'ok' {
   return 'ok';
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function CreditsScreen() {
   const colors = useColors();
@@ -48,13 +46,11 @@ export default function CreditsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.background, paddingTop: Platform.OS === 'web' ? insets.top + 67 : insets.top + 16 }]}>
-      {/* Header */}
       <View style={s.header}>
         <Text style={[s.title, { color: c.foreground }]}>Crédit</Text>
         <Text style={[s.subtitle, { color: c.mutedForeground }]}>Gestion des ventes à crédit</Text>
       </View>
 
-      {/* Sub-tab selector */}
       <View style={[s.tabs, { backgroundColor: c.card, borderColor: c.border }]}>
         <TouchableOpacity
           style={[s.tab, subTab === 'new' && { backgroundColor: c.primary }]}
@@ -80,7 +76,19 @@ export default function CreditsScreen() {
   );
 }
 
-// ─── Sub-tab 1: New Credit Form ───────────────────────────────────────────────
+// ─── Sub-tab 1: New Credit Form ────────────────────────────────────────────────
+
+interface SuccessData {
+  creditId: string;
+  clientNom: string;
+  modele: string;
+  pointure: string;
+  couleur: string;
+  quantite: number;
+  prixTotal: number;
+  acompte: number;
+  resteAPayer: number;
+}
 
 function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
   const colors = useColors();
@@ -89,33 +97,38 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
   const [selectedAchatId, setSelectedAchatId] = useState('');
   const [pickerVisible, setPickerVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [success, setSuccess] = useState<SuccessData | null>(null);
   const c = colors;
 
   const stockList = useMemo(() => getStockList().filter(s => s.quantiteRestante > 0), [getStockList]);
   const selectedStock = useMemo(() => stockList.find(s => s.achat.id === selectedAchatId), [stockList, selectedAchatId]);
 
-  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k: string, v: string) => { setForm(p => ({ ...p, [k]: v })); setErrorMsg(''); };
 
   const prixTotal = parseFloat(form.prixTotal) || 0;
   const acompte = parseFloat(form.acompte) || 0;
   const resteAPayer = Math.max(0, prixTotal - acompte);
 
-  const reset = () => { setForm(INIT_FORM()); setSelectedAchatId(''); };
+  const reset = () => { setForm(INIT_FORM()); setSelectedAchatId(''); setErrorMsg(''); setSuccess(null); };
 
   const submit = async () => {
-    if (!form.clientNom.trim()) { Alert.alert('Champ requis', 'Le nom du client est obligatoire.'); return; }
-    if (!form.clientTelephone.trim()) { Alert.alert('Champ requis', 'Le téléphone est obligatoire.'); return; }
-    if (!form.clientAdresse.trim()) { Alert.alert('Champ requis', "L'adresse / quartier est obligatoire."); return; }
-    if (!selectedAchatId || !selectedStock) { Alert.alert('Article requis', 'Sélectionnez un article depuis le stock.'); return; }
+    setErrorMsg('');
+    if (!form.clientNom.trim()) { setErrorMsg('Le nom du client est obligatoire.'); return; }
+    if (!form.clientTelephone.trim()) { setErrorMsg('Le téléphone du client est obligatoire.'); return; }
+    if (!form.clientAdresse.trim()) { setErrorMsg("L'adresse / quartier est obligatoire."); return; }
+    if (!selectedAchatId || !selectedStock) { setErrorMsg('Sélectionnez un article depuis le stock.'); return; }
     const qty = parseInt(form.quantite, 10);
     if (!qty || qty <= 0 || qty > selectedStock.quantiteRestante) {
-      Alert.alert('Quantité invalide', `Stock disponible: ${selectedStock.quantiteRestante}`); return;
+      setErrorMsg(`Quantité invalide. Stock disponible : ${selectedStock.quantiteRestante}`); return;
     }
-    if (prixTotal <= 0) { Alert.alert('Prix invalide', 'Le prix de vente total doit être supérieur à 0.'); return; }
-    if (acompte < 0 || acompte > prixTotal) { Alert.alert('Acompte invalide', `L'acompte doit être entre 0 et ${formatCFA(prixTotal)}.`); return; }
-    if (!form.dateVente.match(/^\d{4}-\d{2}-\d{2}$/)) { Alert.alert('Date invalide', 'Date de vente: AAAA-MM-JJ.'); return; }
-    if (!form.dateEcheance.match(/^\d{4}-\d{2}-\d{2}$/)) { Alert.alert('Échéance invalide', "Date d'échéance: AAAA-MM-JJ."); return; }
-    if (form.dateEcheance <= form.dateVente) { Alert.alert('Échéance invalide', "La date d'échéance doit être après la date de vente."); return; }
+    if (prixTotal <= 0) { setErrorMsg('Le prix de vente total doit être supérieur à 0.'); return; }
+    if (acompte < 0 || acompte > prixTotal) {
+      setErrorMsg(`L'acompte doit être entre 0 et ${formatCFA(prixTotal)}.`); return;
+    }
+    if (!form.dateVente.match(/^\d{4}-\d{2}-\d{2}$/)) { setErrorMsg('Date de vente invalide — format AAAA-MM-JJ.'); return; }
+    if (!form.dateEcheance.match(/^\d{4}-\d{2}-\d{2}$/)) { setErrorMsg("Date d'échéance invalide — format AAAA-MM-JJ."); return; }
+    if (form.dateEcheance <= form.dateVente) { setErrorMsg("La date d'échéance doit être postérieure à la date de vente."); return; }
 
     setLoading(true);
     try {
@@ -136,19 +149,72 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
         note: form.note.trim(),
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        'Crédit enregistré ✓',
-        `Reste à payer : ${formatCFA(resteAPayer)}`,
-        [
-          { text: 'Voir le reçu', onPress: () => router.push(`/recu-credit/${credit.id}`) },
-          { text: 'Nouveau', onPress: reset },
-        ]
-      );
-      onSuccess();
-    } catch { Alert.alert('Erreur', "L'enregistrement a échoué."); }
-    finally { setLoading(false); }
+      setSuccess({
+        creditId: credit.id,
+        clientNom: form.clientNom.trim(),
+        modele: selectedStock.achat.modele,
+        pointure: selectedStock.achat.pointure,
+        couleur: selectedStock.achat.couleur,
+        quantite: qty,
+        prixTotal,
+        acompte,
+        resteAPayer,
+      });
+      setForm(INIT_FORM());
+      setSelectedAchatId('');
+    } catch {
+      setErrorMsg("L'enregistrement a échoué. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // ── Success screen ──
+  if (success) {
+    return (
+      <View style={s.successWrap}>
+        <View style={[s.successCard, { backgroundColor: c.card }]}>
+          <View style={s.successIcon}>
+            <Ionicons name="checkmark" size={36} color="#fff" />
+          </View>
+          <Text style={[s.successTitle, { color: c.foreground }]}>Crédit enregistré !</Text>
+          <Text style={[s.successSub, { color: c.mutedForeground }]}>Le stock a bien été mis à jour.</Text>
+
+          <View style={[s.successDetails, { backgroundColor: c.background }]}>
+            <DetailRow label="Référence" value={success.creditId} colors={c} />
+            <DetailRow label="Client" value={success.clientNom} colors={c} />
+            <DetailRow label="Article" value={`${success.modele} P${success.pointure}`} colors={c} />
+            <DetailRow label="Quantité" value={`${success.quantite} paire${success.quantite > 1 ? 's' : ''}`} colors={c} />
+            <DetailRow label="Prix total" value={formatCFA(success.prixTotal)} colors={c} />
+            {success.acompte > 0 && <DetailRow label="Acompte" value={formatCFA(success.acompte)} valueColor="#22c55e" colors={c} />}
+            <DetailRow label="Reste à payer" value={formatCFA(success.resteAPayer)} valueColor={success.resteAPayer > 0 ? '#ef4444' : '#22c55e'} colors={c} last />
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[s.receiptBtn, { backgroundColor: '#f97316' }]}
+          onPress={() => { setSuccess(null); router.push(`/recu-credit/${success.creditId}` as any); }}
+        >
+          <Ionicons name="receipt-outline" size={18} color="#fff" />
+          <Text style={s.receiptBtnText}>Voir le reçu</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[s.listBtn, { backgroundColor: c.card, borderColor: c.border }]}
+          onPress={() => { setSuccess(null); onSuccess(); }}
+        >
+          <Ionicons name="list-outline" size={18} color={c.foreground} />
+          <Text style={[s.listBtnText, { color: c.foreground }]}>Voir la liste des crédits</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={reset}>
+          <Text style={[s.newLink, { color: c.mutedForeground }]}>+ Nouveau crédit</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Form ──
   return (
     <KeyboardAwareScrollView
       showsVerticalScrollIndicator={false}
@@ -156,16 +222,21 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
       keyboardShouldPersistTaps="handled"
       bottomOffset={80}
     >
-      {/* Section client */}
+      {/* Error banner */}
+      {!!errorMsg && (
+        <View style={s.errorBanner}>
+          <Ionicons name="alert-circle-outline" size={16} color="#fff" />
+          <Text style={s.errorText}>{errorMsg}</Text>
+        </View>
+      )}
+
       <SectionHeader icon="person-outline" label="INFORMATIONS CLIENT" colors={c} />
       <Field label="NOM COMPLET *" placeholder="Ex: Kouamé Jean" value={form.clientNom} onChangeText={(v: string) => set('clientNom', v)} colors={c} />
       <Field label="TÉLÉPHONE *" placeholder="+225 07 00 00 00 00" value={form.clientTelephone} onChangeText={(v: string) => set('clientTelephone', v)} keyboardType="phone-pad" colors={c} />
       <Field label="ADRESSE / QUARTIER *" placeholder="Ex: Cocody Angré" value={form.clientAdresse} onChangeText={(v: string) => set('clientAdresse', v)} colors={c} />
 
-      {/* Section article */}
       <SectionHeader icon="cube-outline" label="ARTICLE & MONTANTS" colors={c} />
 
-      {/* Stock picker */}
       <Text style={[s.label, { color: c.mutedForeground }]}>ARTICLE *</Text>
       <TouchableOpacity
         style={[s.picker, { backgroundColor: c.card, borderColor: selectedAchatId ? c.primary : c.border }]}
@@ -195,7 +266,6 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
         </View>
       </View>
 
-      {/* Auto-calculated reste */}
       {prixTotal > 0 && (
         <View style={[s.resteBox, { backgroundColor: resteAPayer > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)', borderColor: resteAPayer > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' }]}>
           <Text style={[s.resteLabel, { color: c.mutedForeground }]}>Reste à payer</Text>
@@ -253,8 +323,9 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
                     style={[s.stockRow, { borderColor: c.border }, selectedAchatId === item.achat.id && { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: '#f97316' }]}
                     onPress={() => {
                       setSelectedAchatId(item.achat.id);
-                      setForm(p => ({ ...p, prixTotal: String(item.achat.prixVente) }));
+                      setForm(p => ({ ...p, prixTotal: item.achat.prixVente > 0 ? String(item.achat.prixVente) : '' }));
                       setPickerVisible(false);
+                      setErrorMsg('');
                     }}
                   >
                     <View style={{ flex: 1 }}>
@@ -262,7 +333,10 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
                       <Text style={[s.stockMeta, { color: c.mutedForeground }]}>P{item.achat.pointure} · {item.achat.couleur}</Text>
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                      <Text style={[s.stockPrice, { color: '#f97316' }]}>{formatCFA(item.achat.prixVente)}</Text>
+                      {item.achat.prixVente > 0
+                        ? <Text style={[s.stockPrice, { color: '#f97316' }]}>{formatCFA(item.achat.prixVente)}</Text>
+                        : <Text style={[s.stockPrice, { color: c.mutedForeground }]}>Prix à définir</Text>
+                      }
                       <Text style={[s.stockMeta, { color: c.mutedForeground }]}>Stock: {item.quantiteRestante}</Text>
                     </View>
                   </TouchableOpacity>
@@ -276,7 +350,7 @@ function NewCreditForm({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// ─── Sub-tab 2: Credit List ───────────────────────────────────────────────────
+// ─── Sub-tab 2: Credit List ────────────────────────────────────────────────────
 
 type Filter = 'all' | 'en_cours' | 'solde';
 
@@ -286,7 +360,9 @@ function CreditList() {
   const [filter, setFilter] = useState<Filter>('en_cours');
   const [payModal, setPayModal] = useState<{ id: string; max: number; client: string } | null>(null);
   const [montantPaiement, setMontantPaiement] = useState('');
+  const [payError, setPayError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [paidClient, setPaidClient] = useState('');
   const c = colors;
 
   const totalCreances = getTotalCreances();
@@ -297,23 +373,45 @@ function CreditList() {
     return sorted.filter(vc => vc.statut === filter);
   }, [ventesCredit, filter]);
 
+  const openPayModal = (id: string, max: number, client: string) => {
+    setPayModal({ id, max, client });
+    setMontantPaiement('');
+    setPayError('');
+    setPaidClient('');
+  };
+
   const submitPaiement = async () => {
     if (!payModal) return;
     const m = parseFloat(montantPaiement);
     if (!m || m <= 0 || m > payModal.max) {
-      Alert.alert('Montant invalide', `Entrez un montant entre 1 et ${formatCFA(payModal.max)}`); return;
+      setPayError(`Entrez un montant entre 1 et ${formatCFA(payModal.max)}`);
+      return;
     }
     setLoading(true);
     try {
       await addPaiementVenteCredit(payModal.id, m, getTodayISO());
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (m >= payModal.max) setPaidClient(payModal.client);
       setPayModal(null);
-      if (m >= payModal.max) Alert.alert('Soldé !', `Le crédit de ${payModal.client} est entièrement remboursé.`);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Soldé toast */}
+      {!!paidClient && (
+        <TouchableOpacity
+          style={s.soldeBanner}
+          onPress={() => setPaidClient('')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={s.soldeBannerText}>Crédit de {paidClient} entièrement soldé ✓</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Total banner */}
       <View style={[s.banner, { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: 'rgba(249,115,22,0.25)' }]}>
         <View style={[s.bannerIcon, { backgroundColor: 'rgba(249,115,22,0.15)' }]}>
@@ -350,7 +448,9 @@ function CreditList() {
         ListEmptyComponent={
           <View style={s.empty}>
             <Ionicons name="card-outline" size={48} color={c.mutedForeground} />
-            <Text style={[s.emptyText, { color: c.mutedForeground }]}>Aucun crédit {filter === 'en_cours' ? 'en cours' : filter === 'solde' ? 'soldé' : ''}</Text>
+            <Text style={[s.emptyText, { color: c.mutedForeground }]}>
+              Aucun crédit {filter === 'en_cours' ? 'en cours' : filter === 'solde' ? 'soldé' : ''}
+            </Text>
           </View>
         }
         renderItem={({ item: vc }) => {
@@ -361,7 +461,6 @@ function CreditList() {
 
           return (
             <View style={[s.card, { backgroundColor: c.card, borderLeftWidth: 3, borderLeftColor: vc.statut === 'solde' ? '#22c55e' : status === 'expired' ? '#ef4444' : '#f97316' }]}>
-              {/* Header */}
               <View style={s.cardHead}>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -375,20 +474,17 @@ function CreditList() {
                 </View>
               </View>
 
-              {/* Article */}
               <View style={[s.articleRow, { backgroundColor: c.background }]}>
                 <Text style={[s.articleName, { color: c.foreground }]}>{vc.modele}</Text>
                 <Text style={[s.articleMeta, { color: c.mutedForeground }]}>P{vc.pointure} · {vc.couleur} · ×{vc.quantite}</Text>
               </View>
 
-              {/* Amounts */}
               <View style={s.amtRow}>
                 <AmtItem label="Total" value={formatCFA(vc.prixTotal)} color={c.foreground} colors={c} />
                 <AmtItem label="Acompte" value={formatCFA(vc.prixTotal - vc.resteAPayer)} color="#22c55e" colors={c} />
                 <AmtItem label="Reste dû" value={formatCFA(vc.resteAPayer)} color={vc.resteAPayer > 0 ? '#ef4444' : '#22c55e'} colors={c} big />
               </View>
 
-              {/* Dates */}
               <View style={s.datesRow}>
                 <Text style={[s.dateText, { color: c.mutedForeground }]}>
                   <Ionicons name="calendar-outline" size={11} /> Vente: {formatDate(vc.dateVente)}
@@ -398,7 +494,6 @@ function CreditList() {
                 </Text>
               </View>
 
-              {/* Paiements history */}
               {vc.paiements.length > 0 && (
                 <View style={[s.payHistory, { borderTopColor: c.border }]}>
                   <Text style={[s.payHistoryTitle, { color: c.mutedForeground }]}>
@@ -417,17 +512,15 @@ function CreditList() {
                 </View>
               )}
 
-              {/* Note */}
               {!!vc.note && (
                 <Text style={[s.noteText, { color: c.mutedForeground }]}>📝 {vc.note}</Text>
               )}
 
-              {/* Actions */}
               {vc.statut === 'en_cours' && (
                 <View style={s.actions}>
                   <TouchableOpacity
                     style={[s.actionBtn, { backgroundColor: 'rgba(249,115,22,0.12)', flex: 1 }]}
-                    onPress={() => { setPayModal({ id: vc.id, max: vc.resteAPayer, client: vc.clientNom }); setMontantPaiement(''); }}
+                    onPress={() => openPayModal(vc.id, vc.resteAPayer, vc.clientNom)}
                   >
                     <Ionicons name="add-circle-outline" size={15} color="#f97316" />
                     <Text style={[s.actionText, { color: '#f97316' }]}>Enregistrer paiement</Text>
@@ -465,22 +558,32 @@ function CreditList() {
                 <Text style={[s.sheetSub, { color: c.mutedForeground }]}>
                   {payModal.client} · Reste: {formatCFA(payModal.max)}
                 </Text>
-                <View style={[s.amtInput, { backgroundColor: c.background, borderColor: c.border }]}>
+                {!!payError && (
+                  <View style={s.payErrorBox}>
+                    <Ionicons name="alert-circle-outline" size={14} color="#ef4444" />
+                    <Text style={s.payErrorText}>{payError}</Text>
+                  </View>
+                )}
+                <View style={[s.amtInput, { backgroundColor: c.background, borderColor: payError ? '#ef4444' : c.border }]}>
                   <TextInput
                     style={[s.amtText, { color: c.foreground }]}
                     placeholder={`Montant reçu (max ${formatCFA(payModal.max)})`}
                     placeholderTextColor={c.mutedForeground}
                     value={montantPaiement}
-                    onChangeText={setMontantPaiement}
+                    onChangeText={v => { setMontantPaiement(v); setPayError(''); }}
                     keyboardType="numeric"
                     autoFocus
                   />
                 </View>
                 <TouchableOpacity
                   style={[s.confirmBtn, { backgroundColor: '#f97316', opacity: loading ? 0.7 : 1 }]}
-                  onPress={submitPaiement} disabled={loading}
+                  onPress={submitPaiement}
+                  disabled={loading}
                 >
-                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.confirmText}>Confirmer le paiement</Text>}
+                  {loading
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={s.confirmText}>Confirmer le paiement</Text>
+                  }
                 </TouchableOpacity>
               </>
             )}
@@ -491,7 +594,24 @@ function CreditList() {
   );
 }
 
-// ─── Helper components ────────────────────────────────────────────────────────
+// ─── Helper components ─────────────────────────────────────────────────────────
+
+function DetailRow({ label, value, valueColor, colors: c, last }: {
+  label: string; value: string; valueColor?: string; colors: any; last?: boolean;
+}) {
+  return (
+    <View style={[dr.row, !last && dr.border, { borderColor: c.border }]}>
+      <Text style={[dr.label, { color: c.mutedForeground }]}>{label}</Text>
+      <Text style={[dr.value, { color: valueColor ?? c.foreground }]}>{value}</Text>
+    </View>
+  );
+}
+const dr = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
+  border: { borderBottomWidth: 1 },
+  label: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  value: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+});
 
 function SectionHeader({ icon, label, colors: c }: { icon: any; label: string; colors: any }) {
   return (
@@ -501,7 +621,6 @@ function SectionHeader({ icon, label, colors: c }: { icon: any; label: string; c
     </View>
   );
 }
-
 const sh = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 10, marginBottom: 14, borderBottomWidth: 1 },
   label: { fontSize: 11, fontWeight: '600', fontFamily: 'Inter_600SemiBold', letterSpacing: 0.6 },
@@ -524,7 +643,6 @@ function Field({ label, colors: c, multiline, ...props }: {
     </View>
   );
 }
-
 const fs = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '600', fontFamily: 'Inter_600SemiBold', letterSpacing: 0.6, marginBottom: 6 },
   input: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular', borderWidth: 1 },
@@ -539,7 +657,7 @@ function AmtItem({ label, value, color, colors: c, big }: { label: string; value
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -553,6 +671,8 @@ const s = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '600', fontFamily: 'Inter_600SemiBold', letterSpacing: 0.6, marginBottom: 6 },
   row: { flexDirection: 'row', gap: 12 },
   half: { flex: 1 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ef4444', borderRadius: 10, padding: 12, marginBottom: 14 },
+  errorText: { flex: 1, fontSize: 13, color: '#fff', fontFamily: 'Inter_500Medium' },
   picker: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 14, gap: 8 },
   pickerName: { fontSize: 15, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
   pickerMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
@@ -565,7 +685,21 @@ const s = StyleSheet.create({
   resetText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   submitBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 14 },
   submitText: { fontSize: 15, color: '#fff', fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
-  // list
+  // Success
+  successWrap: { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 12, paddingBottom: 40 },
+  successCard: { borderRadius: 20, padding: 24, alignItems: 'center', gap: 10 },
+  successIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  successTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'Inter_700Bold' },
+  successSub: { fontSize: 14, fontFamily: 'Inter_400Regular', marginBottom: 4 },
+  successDetails: { width: '100%', borderRadius: 12, overflow: 'hidden', marginTop: 4 },
+  receiptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15 },
+  receiptBtnText: { fontSize: 15, color: '#fff', fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  listBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, borderWidth: 1 },
+  listBtnText: { fontSize: 15, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  newLink: { textAlign: 'center', fontSize: 13, fontFamily: 'Inter_500Medium', paddingVertical: 4 },
+  // List
+  soldeBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#22c55e', marginHorizontal: 16, marginTop: 8, borderRadius: 10, padding: 12 },
+  soldeBannerText: { flex: 1, fontSize: 13, color: '#fff', fontFamily: 'Inter_600SemiBold' },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 14, margin: 16, borderRadius: 14, padding: 16, borderWidth: 1 },
   bannerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   bannerAmt: { fontSize: 20, fontWeight: '700', fontFamily: 'Inter_700Bold' },
@@ -602,11 +736,12 @@ const s = StyleSheet.create({
   handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
   sheetTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   sheetSub: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  payErrorBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 8, padding: 10 },
+  payErrorText: { flex: 1, fontSize: 13, color: '#ef4444', fontFamily: 'Inter_500Medium' },
   amtInput: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   amtText: { fontSize: 16, fontFamily: 'Inter_400Regular' },
   confirmBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   confirmText: { fontSize: 16, fontWeight: '600', color: '#fff', fontFamily: 'Inter_600SemiBold' },
-  // picker modal
   emptyModal: { alignItems: 'center', paddingVertical: 40, gap: 10 },
   emptyModalText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   stockRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
