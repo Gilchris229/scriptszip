@@ -108,6 +108,7 @@ interface KPIs {
   montantCredit: number;
   nbArticlesStock: number;
   totalCreances: number;
+  capitalInvesti: number;
 }
 
 interface StockItem {
@@ -327,7 +328,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return sum + Math.max(0, a.quantiteAchetee - vendu);
     }, 0);
     const totalCreances = ventesCredit.filter(vc => vc.statut === 'en_cours').reduce((s, vc) => s + vc.resteAPayer, 0);
-    return { chiffreAffaires, benefice, totalAchats, nbVentes, montantCredit, nbArticlesStock, totalCreances };
+    const capitalInvesti = achats.reduce((sum, a) => sum + a.prixAchat * a.quantiteAchetee, 0);
+    return { chiffreAffaires, benefice, totalAchats, nbVentes, montantCredit, nbArticlesStock, totalCreances, capitalInvesti };
   }, [achats, ventes, ventesCredit]);
 
   const getMonthlyData = useCallback(() => {

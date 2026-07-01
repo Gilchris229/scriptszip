@@ -52,7 +52,20 @@ export default function DashboardScreen() {
           <KpiCard label="Crédit encours" value={formatCFA(kpis.montantCredit)} icon="time-outline" accent="#ef4444" accentBg="rgba(239,68,68,0.12)" colors={colors} />
         </View>
 
-        {/* 5th card — Créances (full-width, orange) */}
+        {/* Capital investi — full-width, blue */}
+        <View style={[styles.creancesCard, { backgroundColor: colors.card, marginBottom: 10 }]}>
+          <View style={[styles.creancesIcon, { backgroundColor: 'rgba(99,102,241,0.15)' }]}>
+            <Ionicons name="wallet-outline" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.creancesLabel, { color: colors.mutedForeground }]}>Capital investi (total)</Text>
+            <Text style={[styles.creancesValue, { color: colors.primary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {formatCFA(kpis.capitalInvesti)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Créances — full-width, orange */}
         <View style={[styles.creancesCard, { backgroundColor: colors.card }]}>
           <View style={[styles.creancesIcon, { backgroundColor: 'rgba(249,115,22,0.15)' }]}>
             <Ionicons name="card-outline" size={22} color="#f97316" />
