@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useStore } from '@/context/StoreContext';
 import { formatCFA, formatDate } from '@/utils';
+import { downloadCreditReceiptPDF, shareCreditViaWhatsApp } from '@/utils/pdfReceipt';
 
 export default function RecuCreditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,38 +16,16 @@ export default function RecuCreditScreen() {
 
   const credit = useMemo(() => ventesCredit.find(vc => vc.id === id), [ventesCredit, id]);
 
-  const printPDF = async () => {
+  const handleDownloadPDF = async () => {
     if (!credit) return;
-    if (Platform.OS === 'web') {
-      Alert.alert('Impression', 'Utilisez la fonction impression de votre navigateur (Ctrl+P).');
-      return;
-    }
-    try {
-      const Print = await import('expo-print');
-      await Print.printAsync({ html: buildHTML(credit, reglages) });
-    } catch {
-      Alert.alert('Erreur', "L'impression n'est pas disponible.");
-    }
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await downloadCreditReceiptPDF(credit, reglages);
   };
 
-  const shareHTML = async () => {
+  const handleWhatsApp = async () => {
     if (!credit) return;
-    if (Platform.OS === 'web') {
-      Alert.alert('Partage', 'Disponible uniquement sur mobile.');
-      return;
-    }
-    try {
-      const Print = await import('expo-print');
-      const Sharing = await import('expo-sharing');
-      const { uri } = await Print.printToFileAsync({ html: buildHTML(credit, reglages) });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: '.pdf' });
-      } else {
-        Alert.alert('Partage indisponible');
-      }
-    } catch {
-      Alert.alert('Erreur', 'Le partage a échoué.');
-    }
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await shareCreditViaWhatsApp(credit, reglages);
   };
 
   if (!credit) {
@@ -114,7 +94,7 @@ export default function RecuCreditScreen() {
           {/* Amounts */}
           <View style={s.section}>
             <AmountLine label="Prix total" value={formatCFA(credit.prixTotal)} colors={c} />
-            <AmountLine label="Acompte versé" value={formatCFA(credit.acompte)} colors={c} accent="#22c55e" />
+            <AmountLine label="Acompte versé" value={formatCFA(montantPaye)} colors={c} accent="#22c55e" />
             <View style={[s.divider, { backgroundColor: c.border, marginVertical: 8 }]} />
             <AmountLine
               label="RESTE À PAYER"
@@ -170,7 +150,7 @@ export default function RecuCreditScreen() {
             </>
           )}
 
-          {/* Credit ID + Status */}
+          {/* Status + ID */}
           <View style={[s.footer, { borderTopColor: c.border }]}>
             <Text style={[s.footerId, { color: c.mutedForeground }]}>{credit.id}</Text>
             <View style={[s.footerBadge, { backgroundColor: isPaid ? 'rgba(34,197,94,0.12)' : 'rgba(249,115,22,0.12)' }]}>
@@ -183,21 +163,26 @@ export default function RecuCreditScreen() {
 
         {/* Actions */}
         <View style={s.actions}>
-          <TouchableOpacity style={[s.actionBtn, { backgroundColor: c.card, borderColor: c.border }]} onPress={printPDF}>
-            <Ionicons name="print-outline" size={20} color={c.foreground} />
-            <Text style={[s.actionText, { color: c.foreground }]}>Imprimer</Text>
+          <TouchableOpacity style={[s.actionBtn, { backgroundColor: c.card, borderColor: c.border }]} onPress={handleDownloadPDF}>
+            <Ionicons name="document-outline" size={20} color={c.foreground} />
+            <Text style={[s.actionText, { color: c.foreground }]}>Télécharger PDF</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#f97316' }]} onPress={shareHTML}>
-            <Ionicons name="share-outline" size={20} color="#fff" />
-            <Text style={[s.actionText, { color: '#fff' }]}>Partager PDF</Text>
+          <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#f97316' }]} onPress={handleDownloadPDF}>
+            <Ionicons name="print-outline" size={20} color="#fff" />
+            <Text style={[s.actionText, { color: '#fff' }]}>Imprimer</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity style={s.whatsappBtn} onPress={handleWhatsApp}>
+          <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+          <Text style={[s.actionText, { color: '#fff' }]}>Partager sur WhatsApp</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={[s.doneBtn, { borderColor: c.border }]} onPress={() => router.back()}>
           <Text style={[s.doneText, { color: c.mutedForeground }]}>Retour</Text>
         </TouchableOpacity>
 
-        <View style={{ height: Platform.OS === 'web' ? 60 : 40 }} />
+        <View style={{ height: 60 }} />
       </ScrollView>
     </View>
   );
@@ -219,59 +204,6 @@ function AmountLine({ label, value, colors: c, accent, big }: { label: string; v
       <Text style={{ fontSize: big ? 20 : 14, fontFamily: big ? 'Inter_700Bold' : 'Inter_500Medium', color: accent ?? c.foreground }}>{value}</Text>
     </View>
   );
-}
-
-function buildHTML(credit: any, reglages: any): string {
-  const montantPaye = credit.prixTotal - credit.resteAPayer;
-  const payHistHtml = credit.paiements.map((p: any) =>
-    `<div class="row"><span class="label">${formatDate(p.date)}</span><span class="value green">+ ${formatCFA(p.montant)}</span></div>`
-  ).join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:24px;max-width:360px;margin:auto}
-    .header{text-align:center;padding-bottom:16px;border-bottom:2px solid #ddd;margin-bottom:16px}
-    .shop{font-size:20px;font-weight:bold;margin-bottom:4px}.info{font-size:12px;color:#666;margin-bottom:2px}
-    .credit-badge{background:#fff3e0;border:1px solid #f97316;border-radius:6px;padding:8px 12px;margin:12px 0;font-size:12px;color:#f97316;text-align:center}
-    .section-title{font-size:11px;color:#999;font-weight:bold;letter-spacing:0.5px;margin:14px 0 6px}
-    .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0}
-    .label{font-size:12px;color:#888}.value{font-size:12px;font-weight:600}
-    .reste{border-top:2px solid #333;margin-top:8px;padding-top:8px}
-    .reste .label{font-size:15px;font-weight:bold;color:#333}.reste .value{font-size:20px;font-weight:bold;color:#ef4444}
-    .dates{display:flex;gap:16px;margin:12px 0;background:#f9f9f9;padding:10px;border-radius:6px}
-    .date-item{flex:1}.date-label{font-size:11px;color:#999}.date-val{font-size:13px;font-weight:bold}
-    .orange{color:#f97316}.green{color:#22c55e}
-    .footer{text-align:center;margin-top:16px;font-size:11px;color:#aaa}
-  </style></head><body>
-    <div class="header">
-      <div class="shop">${reglages.nomBoutique}</div>
-      ${reglages.telephone ? `<div class="info">${reglages.telephone}</div>` : ''}
-      ${reglages.adresse ? `<div class="info">${reglages.adresse}</div>` : ''}
-    </div>
-    <div class="credit-badge">🟠 Vente à crédit — Merci de respecter la date d'échéance</div>
-
-    <div class="section-title">CLIENT</div>
-    <div class="row"><span class="label">Nom</span><span class="value">${credit.clientNom}</span></div>
-    <div class="row"><span class="label">Téléphone</span><span class="value">${credit.clientTelephone}</span></div>
-    <div class="row"><span class="label">Adresse</span><span class="value">${credit.clientAdresse}</span></div>
-
-    <div class="section-title">ARTICLE</div>
-    <div class="row"><span class="label">Article</span><span class="value">${credit.modele} (P${credit.pointure}, ${credit.couleur})</span></div>
-    <div class="row"><span class="label">Quantité</span><span class="value">×${credit.quantite}</span></div>
-
-    <div class="section-title">MONTANTS</div>
-    <div class="row"><span class="label">Prix total</span><span class="value">${formatCFA(credit.prixTotal)}</span></div>
-    <div class="row"><span class="label">Acompte versé</span><span class="value green">${formatCFA(credit.acompte)}</span></div>
-    <div class="row reste"><span class="label">RESTE À PAYER</span><span class="value">${credit.statut === 'solde' ? 'SOLDÉ' : formatCFA(credit.resteAPayer)}</span></div>
-
-    <div class="dates">
-      <div class="date-item"><div class="date-label">Date de vente</div><div class="date-val">${formatDate(credit.dateVente)}</div></div>
-      <div class="date-item"><div class="date-label">Date d'échéance</div><div class="date-val orange">${formatDate(credit.dateEcheance)}</div></div>
-    </div>
-
-    ${credit.paiements.length > 0 ? `<div class="section-title">HISTORIQUE DES PAIEMENTS</div>${payHistHtml}` : ''}
-    ${credit.note ? `<div class="row"><span class="label">Note</span><span class="value">${credit.note}</span></div>` : ''}
-
-    <div class="footer">${credit.id} · ${credit.statut === 'solde' ? 'Soldé' : 'En cours'}</div>
-  </body></html>`;
 }
 
 const s = StyleSheet.create({
@@ -309,6 +241,7 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1 },
   actionText: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  whatsappBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: '#25D366', marginTop: 10 },
   doneBtn: { marginTop: 10, paddingVertical: 13, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   doneText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

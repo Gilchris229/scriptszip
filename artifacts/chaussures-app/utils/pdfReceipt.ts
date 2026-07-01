@@ -136,6 +136,170 @@ export async function downloadReceiptPDF(vente: any, achat: any | undefined, reg
   }
 }
 
+export function buildCreditReceiptHTML(credit: any, reglages: any): string {
+  const montantPaye = credit.prixTotal - credit.resteAPayer;
+  const isPaid = credit.statut === 'solde';
+  const payHistHtml = credit.paiements.map((p: any) =>
+    `<div class="row"><span class="label">${formatDate(p.date)}</span><span class="value green">+ ${formatCFA(p.montant)}</span></div>`
+  ).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;padding:28px;max-width:360px;margin:auto;color:#1a1a1a}
+    .header{text-align:center;padding-bottom:16px;border-bottom:2px solid #eee;margin-bottom:16px}
+    .shop{font-size:22px;font-weight:bold;margin-bottom:4px}
+    .info{font-size:12px;color:#666;margin-bottom:2px}
+    .credit-badge{background:#fff3e0;border:1px solid #f97316;border-radius:8px;padding:10px 14px;margin:14px 0;font-size:12px;color:#f97316;text-align:center;font-weight:600}
+    .section-title{font-size:10px;font-weight:bold;color:#999;letter-spacing:1px;text-transform:uppercase;margin:16px 0 6px}
+    .row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0}
+    .label{font-size:12px;color:#666}
+    .value{font-size:13px;font-weight:600}
+    .article-box{background:#f8f8f8;border-radius:8px;padding:10px 12px;margin:8px 0}
+    .article-name{font-size:15px;font-weight:bold}
+    .article-meta{font-size:12px;color:#666;margin-top:2px}
+    .amounts{margin-top:12px}
+    .total-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:2px solid #333;margin-top:8px}
+    .total-label{font-size:15px;font-weight:bold}
+    .total-value{font-size:20px;font-weight:bold;color:#f97316}
+    .reste-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+    .reste-label{font-size:14px;font-weight:bold;color:#333}
+    .reste-value-ok{font-size:18px;font-weight:bold;color:#22c55e}
+    .reste-value-due{font-size:18px;font-weight:bold;color:#ef4444}
+    .green{color:#22c55e}
+    .dates-box{display:flex;gap:16px;background:#f9f9f9;padding:12px;border-radius:8px;margin:14px 0}
+    .date-item{flex:1}
+    .date-label{font-size:11px;color:#999;margin-bottom:2px}
+    .date-val{font-size:13px;font-weight:bold}
+    .date-val-orange{font-size:13px;font-weight:bold;color:#f97316}
+    .status-box{text-align:center;padding:10px;border-radius:8px;margin-top:14px;font-size:13px;font-weight:600}
+    .status-paid{background:#f0fdf4;color:#15803d}
+    .status-pending{background:#fff7ed;color:#c2410c}
+    .footer{text-align:center;margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#aaa}
+    @media print{body{padding:0}}
+  </style></head><body>
+    <div class="header">
+      <div class="shop">${escHtml(reglages.nomBoutique)}</div>
+      ${reglages.telephone ? `<div class="info">📞 ${escHtml(reglages.telephone)}</div>` : ''}
+      ${reglages.adresse ? `<div class="info">📍 ${escHtml(reglages.adresse)}</div>` : ''}
+    </div>
+
+    <div class="credit-badge">🟠 Vente à crédit — Merci de respecter la date d'échéance</div>
+
+    <div class="section-title">Client</div>
+    <div class="row"><span class="label">Nom</span><span class="value">${escHtml(credit.clientNom)}</span></div>
+    <div class="row"><span class="label">Téléphone</span><span class="value">${escHtml(credit.clientTelephone)}</span></div>
+    <div class="row"><span class="label">Adresse</span><span class="value">${escHtml(credit.clientAdresse)}</span></div>
+
+    <div class="section-title">Article</div>
+    <div class="article-box">
+      <div class="article-name">${escHtml(credit.modele)}</div>
+      <div class="article-meta">Pointure ${escHtml(credit.pointure)} · ${escHtml(credit.couleur)} · ×${credit.quantite}</div>
+    </div>
+
+    <div class="section-title">Montants</div>
+    <div class="amounts">
+      <div class="row"><span class="label">Prix total</span><span class="value">${formatCFA(credit.prixTotal)}</span></div>
+      <div class="row"><span class="label">Acompte versé</span><span class="value green">${formatCFA(montantPaye)}</span></div>
+      <div class="reste-row">
+        <span class="reste-label">RESTE À PAYER</span>
+        <span class="${isPaid ? 'reste-value-ok' : 'reste-value-due'}">${isPaid ? 'SOLDÉ' : formatCFA(credit.resteAPayer)}</span>
+      </div>
+    </div>
+
+    <div class="dates-box">
+      <div class="date-item">
+        <div class="date-label">Date de vente</div>
+        <div class="date-val">${formatDate(credit.dateVente)}</div>
+      </div>
+      <div class="date-item">
+        <div class="date-label">Date d'échéance</div>
+        <div class="date-val-orange">${formatDate(credit.dateEcheance)}</div>
+      </div>
+    </div>
+
+    ${credit.paiements.length > 0 ? `
+    <div class="section-title">Historique des paiements</div>
+    ${payHistHtml}` : ''}
+
+    ${credit.note ? `<div class="row" style="margin-top:8px"><span class="label">Note</span><span class="value">${escHtml(credit.note)}</span></div>` : ''}
+
+    <div class="status-box ${isPaid ? 'status-paid' : 'status-pending'}">
+      ${isPaid ? '✅ Crédit entièrement soldé' : '⏳ Crédit en cours — Échéance le ' + formatDate(credit.dateEcheance)}
+    </div>
+
+    <div class="footer">${escHtml(credit.id)}</div>
+  </body></html>`;
+}
+
+export async function downloadCreditReceiptPDF(credit: any, reglages: any): Promise<void> {
+  const html = buildCreditReceiptHTML(credit, reglages);
+
+  if (Platform.OS === 'web') {
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => { win.print(); }, 400);
+    } else {
+      Alert.alert('Bloqué', 'Autorisez les pop-ups pour télécharger le PDF.');
+    }
+    return;
+  }
+
+  try {
+    const Print = await import('expo-print');
+    const Sharing = await import('expo-sharing');
+    const { uri } = await Print.printToFileAsync({ html, base64: false });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        UTI: '.pdf',
+        dialogTitle: `Reçu crédit — ${credit.clientNom}`,
+      });
+    } else {
+      Alert.alert('Partage indisponible', "Le partage de fichiers n'est pas disponible sur cet appareil.");
+    }
+  } catch {
+    Alert.alert('Erreur', 'La génération du PDF a échoué.');
+  }
+}
+
+export async function shareCreditViaWhatsApp(credit: any, reglages: any): Promise<void> {
+  const montantPaye = credit.prixTotal - credit.resteAPayer;
+  const isPaid = credit.statut === 'solde';
+  const text =
+    `🛍️ *${reglages.nomBoutique}*` +
+    `${reglages.telephone ? '\n📞 ' + reglages.telephone : ''}` +
+    `${reglages.adresse ? '\n📍 ' + reglages.adresse : ''}` +
+    `\n\n*Reçu crédit — ${credit.id}*` +
+    `\n👤 ${credit.clientNom}` +
+    `\n📞 ${credit.clientTelephone}` +
+    `\n📍 ${credit.clientAdresse}` +
+    `\n\n👟 ${credit.modele} — P${credit.pointure} · ${credit.couleur} · ×${credit.quantite}` +
+    `\n\n💰 Total : *${formatCFA(credit.prixTotal)}*` +
+    `\n✅ Payé : ${formatCFA(montantPaye)}` +
+    `\n${isPaid ? '✅ Soldé' : `⏳ Reste : *${formatCFA(credit.resteAPayer)}*`}` +
+    `\n\n📅 Date de vente : ${formatDate(credit.dateVente)}` +
+    `\n⏰ Échéance : ${formatDate(credit.dateEcheance)}` +
+    (credit.note ? `\n📝 ${credit.note}` : '') +
+    `\n\nMerci de votre confiance 🙏`;
+
+  const encoded = encodeURIComponent(text);
+  if (Platform.OS === 'web') {
+    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    return;
+  }
+  const waUrl = `whatsapp://send?text=${encoded}`;
+  try {
+    const canOpen = await Linking.canOpenURL(waUrl);
+    if (canOpen) await Linking.openURL(waUrl);
+    else await Linking.openURL(`https://wa.me/?text=${encoded}`);
+  } catch {
+    Alert.alert('WhatsApp', "WhatsApp n'est pas installé sur cet appareil.");
+  }
+}
+
 export async function shareViaWhatsApp(vente: any, achat: any | undefined, reglages: any): Promise<void> {
   const text = buildReceiptText(vente, reglages);
   const encoded = encodeURIComponent(text);
