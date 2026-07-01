@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,18 +11,67 @@ import { useStockAlerts } from '@/hooks/useStockAlerts';
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { reglages, ventes, getKPIs } = useStore();
+  // Subscribe to all three data sources explicitly so any change triggers a re-render
+  const { reglages, achats, ventes, ventesCredit } = useStore();
   const { getLowStockItems } = useStockAlerts();
   const [mois, setMois] = useState(getCurrentMonth());
 
-  // Computed fresh every render — no stale memoisation
-  const kpis = getKPIs(mois);
-  const recentVentes = ventes
-    .filter(v => v.dateVente.startsWith(mois))
-    .sort((a, b) => b.dateVente.localeCompare(a.dateVente))
-    .slice(0, 12);
   const canGoNext = mois < getCurrentMonth();
   const lowStockItems = getLowStockItems();
+
+  // Compute KPIs directly — no stale closures from context callbacks
+  const kpis = useMemo(() => {
+    const filteredVentes = ventes.filter(v => v.dateVente.startsWith(mois));
+    const filteredVC = ventesCredit.filter(vc => vc.dateVente.startsWith(mois));
+
+    const chiffreAffaires =
+      filteredVentes.reduce((sum, v) => sum + (Number(v.montantTotal) || 0), 0) +
+      filteredVC.reduce((sum, vc) => sum + (Number(vc.prixTotal) || 0), 0);
+
+    const benefice =
+      filteredVentes.reduce((sum, v) => {
+        const achat = achats.find(a => a.id === v.achatId);
+        if (!achat) return sum;
+        return sum + (Number(v.prixUnitaire) - Number(achat.prixAchat)) * Number(v.quantite);
+      }, 0) +
+      filteredVC.reduce((sum, vc) => {
+        const achat = achats.find(a => a.id === vc.achatId);
+        if (!achat) return sum;
+        const pu = Number(vc.quantite) > 0 ? Number(vc.prixTotal) / Number(vc.quantite) : 0;
+        return sum + (pu - Number(achat.prixAchat)) * Number(vc.quantite);
+      }, 0);
+
+    const montantCredit = ventesCredit
+      .filter(vc => vc.statut === 'en_cours')
+      .reduce((sum, vc) => sum + (Number(vc.resteAPayer) || 0), 0);
+
+    const nbArticlesStock = achats.reduce((sum, a) => {
+      const vendu =
+        ventes.filter(v => v.achatId === a.id).reduce((s, v) => s + Number(v.quantite), 0) +
+        ventesCredit.filter(vc => vc.achatId === a.id).reduce((s, vc) => s + Number(vc.quantite), 0);
+      return sum + Math.max(0, Number(a.quantiteAchetee) - vendu);
+    }, 0);
+
+    const totalCreances = ventesCredit
+      .filter(vc => vc.statut === 'en_cours')
+      .reduce((s, vc) => s + (Number(vc.resteAPayer) || 0), 0);
+
+    const capitalInvesti = achats.reduce(
+      (sum, a) => sum + Number(a.prixAchat) * Number(a.quantiteAchetee),
+      0
+    );
+
+    return { chiffreAffaires, benefice, montantCredit, nbArticlesStock, totalCreances, capitalInvesti };
+  }, [achats, ventes, ventesCredit, mois]);
+
+  const recentVentes = useMemo(
+    () =>
+      ventes
+        .filter(v => v.dateVente.startsWith(mois))
+        .sort((a, b) => b.dateVente.localeCompare(a.dateVente))
+        .slice(0, 12),
+    [ventes, mois]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 67 : insets.top + 16 }]}>
@@ -52,7 +101,7 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* KPI grid — 4 standard cards */}
+        {/* KPI grid */}
         <View style={styles.kpiGrid}>
           <KpiCard label="Chiffre d'affaires" value={formatCFA(kpis.chiffreAffaires)} icon="trending-up" accent="#22c55e" accentBg="rgba(34,197,94,0.12)" colors={colors} />
           <KpiCard label="Bénéfice net" value={formatCFA(kpis.benefice)} icon="cash-outline" accent={colors.primary} accentBg="rgba(99,102,241,0.12)" colors={colors} />
@@ -60,7 +109,7 @@ export default function DashboardScreen() {
           <KpiCard label="Crédit encours" value={formatCFA(kpis.montantCredit)} icon="time-outline" accent="#ef4444" accentBg="rgba(239,68,68,0.12)" colors={colors} />
         </View>
 
-        {/* Capital investi — full-width, blue */}
+        {/* Capital investi */}
         <View style={[styles.creancesCard, { backgroundColor: colors.card, marginBottom: 10 }]}>
           <View style={[styles.creancesIcon, { backgroundColor: 'rgba(99,102,241,0.15)' }]}>
             <Ionicons name="wallet-outline" size={22} color={colors.primary} />
@@ -73,7 +122,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Créances — full-width, orange */}
+        {/* Créances */}
         <View style={[styles.creancesCard, { backgroundColor: colors.card }]}>
           <View style={[styles.creancesIcon, { backgroundColor: 'rgba(249,115,22,0.15)' }]}>
             <Ionicons name="card-outline" size={22} color="#f97316" />
