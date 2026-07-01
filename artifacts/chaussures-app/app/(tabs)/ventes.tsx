@@ -17,21 +17,34 @@ const INIT_FORM = () => ({
   estCredit: false, montantPaye: '',
 });
 
+interface SuccessData {
+  venteId: string;
+  modele: string;
+  pointure: string;
+  couleur: string;
+  quantite: number;
+  total: number;
+  estCredit: boolean;
+  resteAPayer: number;
+  client: string;
+}
+
 export default function VentesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getStockList, addVente, achats } = useStore();
+  const { getStockList, addVente } = useStore();
 
   const [selectedAchatId, setSelectedAchatId] = useState('');
   const [pickerVisible, setPickerVisible] = useState(false);
   const [form, setForm] = useState(INIT_FORM());
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<SuccessData | null>(null);
 
   const stockList = useMemo(() => getStockList().filter(s => s.quantiteRestante > 0), [getStockList]);
   const selectedStock = useMemo(() => stockList.find(s => s.achat.id === selectedAchatId), [stockList, selectedAchatId]);
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
-  const reset = () => { setSelectedAchatId(''); setForm(INIT_FORM()); };
+  const reset = () => { setSelectedAchatId(''); setForm(INIT_FORM()); setSuccess(null); };
 
   const submit = async () => {
     if (!selectedAchatId || !selectedStock) {
@@ -84,8 +97,19 @@ export default function VentesScreen() {
         resteAPayer,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      reset();
-      router.push(`/recu/${vente.id}`);
+      setSuccess({
+        venteId: vente.id,
+        modele: selectedStock.achat.modele,
+        pointure: selectedStock.achat.pointure,
+        couleur: selectedStock.achat.couleur,
+        quantite: qty,
+        total,
+        estCredit: form.estCredit,
+        resteAPayer,
+        client: form.client.trim(),
+      });
+      setSelectedAchatId('');
+      setForm(INIT_FORM());
     } catch {
       Alert.alert('Erreur', "L'enregistrement a échoué.");
     } finally {
@@ -95,103 +119,158 @@ export default function VentesScreen() {
 
   const c = colors;
   const total = selectedStock ? selectedStock.achat.prixVente * (parseInt(form.quantite) || 1) : 0;
+  const topPad = Platform.OS === 'web' ? insets.top + 67 : insets.top + 16;
 
   return (
-    <View style={[s.container, { backgroundColor: c.background, paddingTop: Platform.OS === 'web' ? insets.top + 67 : insets.top + 16 }]}>
+    <View style={[s.container, { backgroundColor: c.background, paddingTop: topPad }]}>
       <View style={s.titleRow}>
         <Text style={[s.title, { color: c.foreground }]}>Nouvelle vente</Text>
         <Text style={[s.subtitle, { color: c.mutedForeground }]}>Enregistrer une sortie de stock</Text>
       </View>
 
-      <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.form} keyboardShouldPersistTaps="handled" bottomOffset={80}>
-        {/* Article picker */}
-        <Text style={[s.label, { color: c.mutedForeground }]}>ARTICLE *</Text>
-        <TouchableOpacity
-          style={[s.picker, { backgroundColor: c.card, borderColor: selectedAchatId ? c.primary : c.border }]}
-          onPress={() => setPickerVisible(true)}
-        >
-          {selectedStock ? (
-            <View style={{ flex: 1 }}>
-              <Text style={[s.pickerTitle, { color: c.foreground }]}>{selectedStock.achat.modele}</Text>
-              <Text style={[s.pickerSub, { color: c.mutedForeground }]}>
-                P{selectedStock.achat.pointure} · {selectedStock.achat.couleur} · Stock: {selectedStock.quantiteRestante}
+      {success ? (
+        /* ── Success state ── */
+        <View style={s.successWrap}>
+          <View style={[s.successCard, { backgroundColor: c.card }]}>
+            <View style={s.successIconCircle}>
+              <Ionicons name="checkmark" size={36} color="#fff" />
+            </View>
+            <Text style={[s.successTitle, { color: c.foreground }]}>Vente enregistrée !</Text>
+            <Text style={[s.successSub, { color: c.mutedForeground }]}>Le stock a bien été mis à jour.</Text>
+
+            <View style={[s.successDetails, { backgroundColor: c.background }]}>
+              <DetailRow label="Article" value={success.modele} colors={c} />
+              <DetailRow label="Pointure" value={success.pointure} colors={c} />
+              <DetailRow label="Couleur" value={success.couleur} colors={c} />
+              <DetailRow label="Quantité" value={`${success.quantite} paire${success.quantite > 1 ? 's' : ''}`} colors={c} />
+              {success.client ? <DetailRow label="Client" value={success.client} colors={c} /> : null}
+              <DetailRow
+                label="Total"
+                value={formatCFA(success.total)}
+                valueColor="#22c55e"
+                colors={c}
+              />
+              {success.estCredit && success.resteAPayer > 0 && (
+                <DetailRow
+                  label="Reste à payer"
+                  value={formatCFA(success.resteAPayer)}
+                  valueColor="#ef4444"
+                  colors={c}
+                  last
+                />
+              )}
+              {(!success.estCredit || success.resteAPayer === 0) && (
+                <DetailRow label="Statut" value="Payé ✓" valueColor="#22c55e" colors={c} last />
+              )}
+            </View>
+          </View>
+
+          {/* Action buttons */}
+          <TouchableOpacity
+            style={[s.receiptBtn, { backgroundColor: c.primary }]}
+            onPress={() => { setSuccess(null); router.push(`/recu/${success.venteId}`); }}
+          >
+            <Ionicons name="receipt-outline" size={18} color="#fff" />
+            <Text style={s.receiptBtnText}>Voir le reçu</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[s.newBtn, { backgroundColor: c.card, borderColor: c.border }]} onPress={reset}>
+            <Ionicons name="add" size={18} color={c.foreground} />
+            <Text style={[s.newBtnText, { color: c.foreground }]}>Nouvelle vente</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        /* ── Form ── */
+        <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.form} keyboardShouldPersistTaps="handled" bottomOffset={80}>
+          {/* Article picker */}
+          <Text style={[s.label, { color: c.mutedForeground }]}>ARTICLE *</Text>
+          <TouchableOpacity
+            style={[s.picker, { backgroundColor: c.card, borderColor: selectedAchatId ? c.primary : c.border }]}
+            onPress={() => setPickerVisible(true)}
+          >
+            {selectedStock ? (
+              <View style={{ flex: 1 }}>
+                <Text style={[s.pickerTitle, { color: c.foreground }]}>{selectedStock.achat.modele}</Text>
+                <Text style={[s.pickerSub, { color: c.mutedForeground }]}>
+                  P{selectedStock.achat.pointure} · {selectedStock.achat.couleur} · Stock: {selectedStock.quantiteRestante}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[s.pickerPlaceholder, { color: c.mutedForeground }]}>Sélectionner un article</Text>
+            )}
+            <Ionicons name="chevron-down" size={18} color={c.mutedForeground} />
+          </TouchableOpacity>
+
+          {selectedStock && (
+            <View style={[s.priceInfo, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.25)' }]}>
+              <Text style={[s.priceInfoText, { color: c.primary }]}>
+                Prix unitaire: {formatCFA(selectedStock.achat.prixVente)}  ·  Stock dispo: {selectedStock.quantiteRestante}
               </Text>
             </View>
-          ) : (
-            <Text style={[s.pickerPlaceholder, { color: c.mutedForeground }]}>Sélectionner un article</Text>
           )}
-          <Ionicons name="chevron-down" size={18} color={c.mutedForeground} />
-        </TouchableOpacity>
 
-        {selectedStock && (
-          <View style={[s.priceInfo, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.25)' }]}>
-            <Text style={[s.priceInfoText, { color: c.primary }]}>
-              Prix unitaire: {formatCFA(selectedStock.achat.prixVente)}  ·  Stock dispo: {selectedStock.quantiteRestante}
-            </Text>
+          <Field label="QUANTITÉ *" placeholder="1" value={form.quantite} onChangeText={v => set('quantite', v)} keyboardType="numeric" colors={c} />
+          <Field label="CLIENT (OPTIONNEL)" placeholder="Nom du client" value={form.client} onChangeText={v => set('client', v)} colors={c} />
+          <Field label="DATE DE VENTE" placeholder="AAAA-MM-JJ" value={form.dateVente} onChangeText={v => set('dateVente', v)} colors={c} />
+
+          {/* Credit toggle */}
+          <View style={s.toggleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.toggleLabel, { color: c.foreground }]}>Vente à crédit</Text>
+              <Text style={[s.toggleSub, { color: c.mutedForeground }]}>Le client paye en plusieurs fois</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => set('estCredit', !form.estCredit)}
+              style={[s.toggle, { backgroundColor: form.estCredit ? c.primary : c.card, borderColor: form.estCredit ? c.primary : c.border }]}
+            >
+              <View style={[s.toggleThumb, { transform: [{ translateX: form.estCredit ? 18 : 2 }] }]} />
+            </TouchableOpacity>
           </View>
-        )}
 
-        <Field label="QUANTITÉ *" placeholder="1" value={form.quantite} onChangeText={v => set('quantite', v)} keyboardType="numeric" colors={c} />
-        <Field label="CLIENT (OPTIONNEL)" placeholder="Nom du client" value={form.client} onChangeText={v => set('client', v)} colors={c} />
-        <Field label="DATE DE VENTE" placeholder="AAAA-MM-JJ" value={form.dateVente} onChangeText={v => set('dateVente', v)} colors={c} />
+          {form.estCredit && (
+            <Field
+              label="MONTANT PAYÉ MAINTENANT (FCFA)"
+              placeholder={`0 à ${total}`}
+              value={form.montantPaye}
+              onChangeText={v => set('montantPaye', v)}
+              keyboardType="numeric"
+              colors={c}
+            />
+          )}
 
-        {/* Credit toggle */}
-        <View style={s.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.toggleLabel, { color: c.foreground }]}>Vente à crédit</Text>
-            <Text style={[s.toggleSub, { color: c.mutedForeground }]}>Le client paye en plusieurs fois</Text>
+          {/* Total preview */}
+          {selectedStock && (
+            <View style={[s.totalBox, { backgroundColor: c.card }]}>
+              <Text style={[s.totalLabel, { color: c.mutedForeground }]}>Total à payer</Text>
+              <Text style={[s.totalValue, { color: c.primary }]}>{formatCFA(total)}</Text>
+              {form.estCredit && parseFloat(form.montantPaye) > 0 && (
+                <Text style={[s.totalSub, { color: '#ef4444' }]}>
+                  Reste: {formatCFA(Math.max(0, total - parseFloat(form.montantPaye)))}
+                </Text>
+              )}
+            </View>
+          )}
+
+          <View style={s.btnRow}>
+            <TouchableOpacity style={[s.resetBtn, { backgroundColor: c.card, borderColor: c.border }]} onPress={reset}>
+              <Ionicons name="refresh" size={16} color={c.mutedForeground} />
+              <Text style={[s.resetText, { color: c.mutedForeground }]}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.submitBtn, { backgroundColor: c.primary, opacity: loading ? 0.7 : 1 }]}
+              onPress={submit} disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#fff" size="small" /> : (
+                <>
+                  <Ionicons name="bag-check" size={18} color="#fff" />
+                  <Text style={s.submitText}>Valider la vente</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={() => set('estCredit', !form.estCredit)}
-            style={[s.toggle, { backgroundColor: form.estCredit ? c.primary : c.card, borderColor: form.estCredit ? c.primary : c.border }]}
-          >
-            <View style={[s.toggleThumb, { transform: [{ translateX: form.estCredit ? 18 : 2 }] }]} />
-          </TouchableOpacity>
-        </View>
-
-        {form.estCredit && (
-          <Field
-            label="MONTANT PAYÉ MAINTENANT (FCFA)"
-            placeholder={`0 à ${total}`}
-            value={form.montantPaye}
-            onChangeText={v => set('montantPaye', v)}
-            keyboardType="numeric"
-            colors={c}
-          />
-        )}
-
-        {/* Total preview */}
-        {selectedStock && (
-          <View style={[s.totalBox, { backgroundColor: c.card }]}>
-            <Text style={[s.totalLabel, { color: c.mutedForeground }]}>Total à payer</Text>
-            <Text style={[s.totalValue, { color: c.primary }]}>{formatCFA(total)}</Text>
-            {form.estCredit && parseFloat(form.montantPaye) > 0 && (
-              <Text style={[s.totalSub, { color: '#ef4444' }]}>
-                Reste: {formatCFA(Math.max(0, total - parseFloat(form.montantPaye)))}
-              </Text>
-            )}
-          </View>
-        )}
-
-        <View style={s.btnRow}>
-          <TouchableOpacity style={[s.resetBtn, { backgroundColor: c.card, borderColor: c.border }]} onPress={reset}>
-            <Ionicons name="refresh" size={16} color={c.mutedForeground} />
-            <Text style={[s.resetText, { color: c.mutedForeground }]}>Annuler</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.submitBtn, { backgroundColor: c.primary, opacity: loading ? 0.7 : 1 }]}
-            onPress={submit} disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#fff" size="small" /> : (
-              <>
-                <Ionicons name="bag-check" size={18} color="#fff" />
-                <Text style={s.submitText}>Valider la vente</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-        <View style={{ height: Platform.OS === 'web' ? 120 : 100 }} />
-      </KeyboardAwareScrollView>
+          <View style={{ height: Platform.OS === 'web' ? 120 : 100 }} />
+        </KeyboardAwareScrollView>
+      )}
 
       {/* Stock picker modal */}
       <Modal visible={pickerVisible} transparent animationType="slide">
@@ -236,6 +315,24 @@ export default function VentesScreen() {
     </View>
   );
 }
+
+function DetailRow({ label, value, valueColor, colors: c, last }: {
+  label: string; value: string; valueColor?: string; colors: any; last?: boolean;
+}) {
+  return (
+    <View style={[sd.row, !last && sd.rowBorder, { borderColor: c.border }]}>
+      <Text style={[sd.label, { color: c.mutedForeground }]}>{label}</Text>
+      <Text style={[sd.value, { color: valueColor ?? c.foreground }]}>{value}</Text>
+    </View>
+  );
+}
+
+const sd = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
+  rowBorder: { borderBottomWidth: 1 },
+  label: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  value: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+});
 
 interface FieldProps extends React.ComponentProps<typeof TextInput> {
   label: string;
@@ -282,6 +379,18 @@ const s = StyleSheet.create({
   resetText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   submitBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 14 },
   submitText: { fontSize: 15, color: '#fff', fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  // Success
+  successWrap: { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 12, paddingBottom: 40 },
+  successCard: { borderRadius: 20, padding: 24, alignItems: 'center', gap: 10 },
+  successIconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  successTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'Inter_700Bold' },
+  successSub: { fontSize: 14, fontFamily: 'Inter_400Regular', marginBottom: 8 },
+  successDetails: { width: '100%', borderRadius: 12, overflow: 'hidden', marginTop: 4 },
+  receiptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15 },
+  receiptBtnText: { fontSize: 15, color: '#fff', fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  newBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, borderWidth: 1 },
+  newBtnText: { fontSize: 15, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
   modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
