@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity, Alert,
-  TextInput, Platform,
+  View, Text, FlatList, StyleSheet, TouchableOpacity,
+  TextInput, Platform, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,8 @@ export default function StockScreen() {
   const insets = useSafeAreaInsets();
   const { getStockList, deleteAchat } = useStore();
   const [search, setSearch] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; modele: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const stockList = useMemo(() => {
     const list = getStockList();
@@ -28,21 +30,16 @@ export default function StockScreen() {
     );
   }, [getStockList, search]);
 
-  const confirmDelete = (id: string, modele: string) => {
-    Alert.alert(
-      'Supprimer',
-      `Supprimer "${modele}" et toutes ses ventes associées ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer', style: 'destructive',
-          onPress: async () => {
-            await deleteAchat(id);
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ]
-    );
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteAchat(deleteTarget.id);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
   };
 
   const c = colors;
@@ -127,7 +124,7 @@ export default function StockScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[s.actionBtn, { backgroundColor: 'rgba(239,68,68,0.12)' }]}
-                  onPress={() => confirmDelete(achat.id, achat.modele)}
+                  onPress={() => setDeleteTarget({ id: achat.id, modele: achat.modele })}
                 >
                   <Ionicons name="trash" size={15} color="#ef4444" />
                 </TouchableOpacity>
@@ -136,6 +133,39 @@ export default function StockScreen() {
           );
         }}
       />
+
+      {/* Delete confirmation modal */}
+      <Modal visible={!!deleteTarget} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={[s.dialog, { backgroundColor: c.card }]}>
+            <View style={s.dialogIcon}>
+              <Ionicons name="trash" size={28} color="#ef4444" />
+            </View>
+            <Text style={[s.dialogTitle, { color: c.foreground }]}>Supprimer l'article ?</Text>
+            <Text style={[s.dialogBody, { color: c.mutedForeground }]}>
+              {`"${deleteTarget?.modele}" et toutes ses ventes associées seront supprimés définitivement.`}
+            </Text>
+            <View style={s.dialogBtns}>
+              <TouchableOpacity
+                style={[s.dialogBtn, { backgroundColor: c.background, borderColor: c.border }]}
+                onPress={() => setDeleteTarget(null)}
+                disabled={deleting}
+              >
+                <Text style={[s.dialogBtnText, { color: c.foreground }]}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.dialogBtn, s.dialogBtnDelete, { opacity: deleting ? 0.6 : 1 }]}
+                onPress={handleDelete}
+                disabled={deleting}
+              >
+                <Text style={[s.dialogBtnText, { color: '#fff' }]}>
+                  {deleting ? 'Suppression…' : 'Supprimer'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -171,4 +201,14 @@ const s = StyleSheet.create({
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   fournisseur: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular' },
   actionBtn: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  // Modal
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  dialog: { width: '100%', maxWidth: 340, borderRadius: 20, padding: 24, alignItems: 'center', gap: 12 },
+  dialogIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(239,68,68,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  dialogTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  dialogBody: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 20 },
+  dialogBtns: { flexDirection: 'row', gap: 10, marginTop: 8, width: '100%' },
+  dialogBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
+  dialogBtnDelete: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
+  dialogBtnText: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
 });
