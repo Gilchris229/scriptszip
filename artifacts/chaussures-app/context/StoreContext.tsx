@@ -312,22 +312,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const getKPIs = useCallback((month?: string): KPIs => {
     const filteredVentes = month ? ventes.filter(v => v.dateVente.startsWith(month)) : ventes;
     const filteredAchats = month ? achats.filter(a => a.dateAchat.startsWith(month)) : achats;
-    const chiffreAffaires = filteredVentes.reduce((sum, v) => sum + v.montantTotal, 0);
-    const benefice = filteredVentes.reduce((sum, v) => {
-      const achat = achats.find(a => a.id === v.achatId);
-      if (!achat) return sum;
-      return sum + (v.prixUnitaire - achat.prixAchat) * v.quantite;
-    }, 0);
+    const filteredVC = month ? ventesCredit.filter(vc => vc.dateVente.startsWith(month)) : ventesCredit;
+
+    // Chiffre d'affaires = ventes ordinaires + ventes à crédit (montant total)
+    const chiffreAffaires =
+      filteredVentes.reduce((sum, v) => sum + v.montantTotal, 0) +
+      filteredVC.reduce((sum, vc) => sum + vc.prixTotal, 0);
+
+    // Bénéfice = marge sur ventes ordinaires + marge sur ventes à crédit
+    const benefice =
+      filteredVentes.reduce((sum, v) => {
+        const achat = achats.find(a => a.id === v.achatId);
+        if (!achat) return sum;
+        return sum + (v.prixUnitaire - achat.prixAchat) * v.quantite;
+      }, 0) +
+      filteredVC.reduce((sum, vc) => {
+        const achat = achats.find(a => a.id === vc.achatId);
+        if (!achat) return sum;
+        const pu = vc.quantite > 0 ? vc.prixTotal / vc.quantite : 0;
+        return sum + (pu - achat.prixAchat) * vc.quantite;
+      }, 0);
+
     const totalAchats = filteredAchats.reduce((sum, a) => sum + a.prixAchat * a.quantiteAchetee, 0);
-    const nbVentes = filteredVentes.length;
-    const montantCredit = ventes.reduce((sum, v) => sum + (v.resteAPayer || 0), 0);
+    const nbVentes = filteredVentes.length + filteredVC.length;
+
+    // Montant crédit encours = reste à payer sur toutes les ventes à crédit en cours
+    const montantCredit = ventesCredit
+      .filter(vc => vc.statut === 'en_cours')
+      .reduce((sum, vc) => sum + vc.resteAPayer, 0);
+
     const nbArticlesStock = achats.reduce((sum, a) => {
       const vendu =
         ventes.filter(v => v.achatId === a.id).reduce((s, v) => s + v.quantite, 0) +
         ventesCredit.filter(vc => vc.achatId === a.id).reduce((s, vc) => s + vc.quantite, 0);
       return sum + Math.max(0, a.quantiteAchetee - vendu);
     }, 0);
-    const totalCreances = ventesCredit.filter(vc => vc.statut === 'en_cours').reduce((s, vc) => s + vc.resteAPayer, 0);
+    const totalCreances = ventesCredit
+      .filter(vc => vc.statut === 'en_cours')
+      .reduce((s, vc) => s + vc.resteAPayer, 0);
     const capitalInvesti = achats.reduce((sum, a) => sum + a.prixAchat * a.quantiteAchetee, 0);
     return { chiffreAffaires, benefice, totalAchats, nbVentes, montantCredit, nbArticlesStock, totalCreances, capitalInvesti };
   }, [achats, ventes, ventesCredit]);
