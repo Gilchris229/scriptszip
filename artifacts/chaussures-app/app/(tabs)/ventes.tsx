@@ -128,8 +128,22 @@ export default function VentesScreen() {
         <Text style={[s.subtitle, { color: c.mutedForeground }]}>Enregistrer une sortie de stock</Text>
       </View>
 
+      {/* Stock vide — bloque le formulaire */}
+      {!success && stockList.length === 0 && (
+        <View style={s.emptyState}>
+          <View style={[s.emptyIconCircle, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+            <Ionicons name="cube-outline" size={40} color="#f59e0b" />
+          </View>
+          <Text style={[s.emptyTitle, { color: c.foreground }]}>Stock épuisé</Text>
+          <Text style={[s.emptyMsg, { color: c.mutedForeground }]}>
+            Vous n'avez aucun article disponible en stock.{'\n'}Ajoutez des articles via l'onglet Achats avant d'enregistrer une vente.
+          </Text>
+        </View>
+      )}
+
       {success ? (
         /* ── Success state ── */
+
         <View style={s.successWrap}>
           <View style={[s.successCard, { backgroundColor: c.card }]}>
             <View style={s.successIconCircle}>
