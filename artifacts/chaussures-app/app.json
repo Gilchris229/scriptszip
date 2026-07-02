@@ -26,7 +26,14 @@
       }
     },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "bundler": "metro",
+      "output": "static",
+      "name": "Gestion Chaussures",
+      "shortName": "Chaussures",
+      "description": "Application de gestion de boutique de chaussures",
+      "themeColor": "#4f46e5",
+      "backgroundColor": "#0f172a"
     },
     "plugins": [
       [
