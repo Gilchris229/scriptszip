@@ -24,9 +24,13 @@ export default function DashboardScreen() {
     const filteredVentes = ventes.filter(v => v.dateVente.startsWith(mois));
     const filteredVC = ventesCredit.filter(vc => vc.dateVente.startsWith(mois));
 
+    // CA = ventes ordinaires + paiements de crédit encaissés ce mois (par date d'encaissement)
     const chiffreAffaires =
       filteredVentes.reduce((sum, v) => sum + (Number(v.montantTotal) || 0), 0) +
-      filteredVC.reduce((sum, vc) => sum + (Number(vc.prixTotal) || 0), 0);
+      ventesCredit.reduce((sum, vc) => {
+        const paiementsMois = vc.paiements.filter(p => p.date.startsWith(mois));
+        return sum + paiementsMois.reduce((s, p) => s + (Number(p.montant) || 0), 0);
+      }, 0);
 
     const benefice =
       filteredVentes.reduce((sum, v) => {
@@ -34,11 +38,14 @@ export default function DashboardScreen() {
         if (!achat) return sum;
         return sum + (Number(v.prixUnitaire) - Number(achat.prixAchat)) * Number(v.quantite);
       }, 0) +
-      filteredVC.reduce((sum, vc) => {
+      ventesCredit.reduce((sum, vc) => {
         const achat = achats.find(a => a.id === vc.achatId);
         if (!achat) return sum;
-        const pu = Number(vc.quantite) > 0 ? Number(vc.prixTotal) / Number(vc.quantite) : 0;
-        return sum + (pu - Number(achat.prixAchat)) * Number(vc.quantite);
+        const paiementsMois = vc.paiements.filter(p => p.date.startsWith(mois));
+        const totalPaye = paiementsMois.reduce((s, p) => s + (Number(p.montant) || 0), 0);
+        if (totalPaye === 0 || Number(vc.prixTotal) === 0) return sum;
+        const coutProportion = (totalPaye / Number(vc.prixTotal)) * Number(vc.quantite) * Number(achat.prixAchat);
+        return sum + (totalPaye - coutProportion);
       }, 0);
 
     const montantCredit = ventesCredit

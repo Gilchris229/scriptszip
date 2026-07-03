@@ -312,29 +312,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const getKPIs = useCallback((month?: string): KPIs => {
     const filteredVentes = month ? ventes.filter(v => v.dateVente.startsWith(month)) : ventes;
     const filteredAchats = month ? achats.filter(a => a.dateAchat.startsWith(month)) : achats;
-    const filteredVC = month ? ventesCredit.filter(vc => vc.dateVente.startsWith(month)) : ventesCredit;
 
-    // Chiffre d'affaires = ventes ordinaires + ventes à crédit (montant total)
+    // CA = ventes ordinaires + paiements de crédit encaissés ce mois (par date d'encaissement)
     const chiffreAffaires =
       filteredVentes.reduce((sum, v) => sum + v.montantTotal, 0) +
-      filteredVC.reduce((sum, vc) => sum + vc.prixTotal, 0);
+      ventesCredit.reduce((sum, vc) => {
+        const paiementsMois = month
+          ? vc.paiements.filter(p => p.date.startsWith(month))
+          : vc.paiements;
+        return sum + paiementsMois.reduce((s, p) => s + p.montant, 0);
+      }, 0);
 
-    // Bénéfice = marge sur ventes ordinaires + marge sur ventes à crédit
+    // Bénéfice = marge sur ventes ordinaires + marge proportionnelle sur paiements encaissés
     const benefice =
       filteredVentes.reduce((sum, v) => {
         const achat = achats.find(a => a.id === v.achatId);
         if (!achat) return sum;
         return sum + (v.prixUnitaire - achat.prixAchat) * v.quantite;
       }, 0) +
-      filteredVC.reduce((sum, vc) => {
+      ventesCredit.reduce((sum, vc) => {
         const achat = achats.find(a => a.id === vc.achatId);
         if (!achat) return sum;
-        const pu = vc.quantite > 0 ? vc.prixTotal / vc.quantite : 0;
-        return sum + (pu - achat.prixAchat) * vc.quantite;
+        const paiementsMois = month
+          ? vc.paiements.filter(p => p.date.startsWith(month))
+          : vc.paiements;
+        const totalPaye = paiementsMois.reduce((s, p) => s + p.montant, 0);
+        if (totalPaye === 0 || vc.prixTotal === 0) return sum;
+        const coutProportion = (totalPaye / vc.prixTotal) * vc.quantite * achat.prixAchat;
+        return sum + (totalPaye - coutProportion);
       }, 0);
 
     const totalAchats = filteredAchats.reduce((sum, a) => sum + a.prixAchat * a.quantiteAchetee, 0);
-    const nbVentes = filteredVentes.length + filteredVC.length;
+    const nbVentes = filteredVentes.length + ventesCredit.filter(vc => month ? vc.paiements.some(p => p.date.startsWith(month)) : true).length;
 
     // Montant crédit encours = reste à payer sur toutes les ventes à crédit en cours
     const montantCredit = ventesCredit
