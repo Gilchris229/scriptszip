@@ -358,6 +358,7 @@ function CreditList() {
   const colors = useColors();
   const { ventesCredit, addPaiementVenteCredit, getTotalCreances } = useStore();
   const [filter, setFilter] = useState<Filter>('en_cours');
+  const [search, setSearch] = useState('');
   const [payModal, setPayModal] = useState<{ id: string; max: number; client: string } | null>(null);
   const [montantPaiement, setMontantPaiement] = useState('');
   const [payError, setPayError] = useState('');
@@ -369,9 +370,19 @@ function CreditList() {
 
   const filtered = useMemo(() => {
     const sorted = [...ventesCredit].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (filter === 'all') return sorted;
-    return sorted.filter(vc => vc.statut === filter);
-  }, [ventesCredit, filter]);
+    let result = filter === 'all' ? sorted : sorted.filter(vc => vc.statut === filter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(vc =>
+        vc.modele.toLowerCase().includes(q) ||
+        vc.pointure.toLowerCase().includes(q) ||
+        vc.couleur.toLowerCase().includes(q) ||
+        vc.clientNom.toLowerCase().includes(q) ||
+        vc.clientTelephone.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [ventesCredit, filter, search]);
 
   const openPayModal = (id: string, max: number, client: string) => {
     setPayModal({ id, max, client });
@@ -423,6 +434,23 @@ function CreditList() {
             {ventesCredit.filter(vc => vc.statut === 'en_cours').length} crédit(s) en cours
           </Text>
         </View>
+      </View>
+
+      {/* Search */}
+      <View style={[s.searchBox, { backgroundColor: c.card, borderColor: c.border }]}>
+        <Ionicons name="search" size={16} color={c.mutedForeground} />
+        <TextInput
+          style={[s.searchInput, { color: c.foreground }]}
+          placeholder="Rechercher un client, modèle, pointure..."
+          placeholderTextColor={c.mutedForeground}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Ionicons name="close-circle" size={16} color={c.mutedForeground} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Filter chips */}
@@ -704,6 +732,8 @@ const s = StyleSheet.create({
   bannerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   bannerAmt: { fontSize: 20, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   bannerSub: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', padding: 0 },
   filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 12 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   chipText: { fontSize: 13, fontFamily: 'Inter_500Medium' },

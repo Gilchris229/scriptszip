@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
@@ -19,12 +19,24 @@ export default function HistoriqueScreen() {
   const { achats, ventes, ventesCredit, reglages } = useStore();
   const [tab, setTab] = useState<Tab>('ventes');
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const c = colors;
 
   const sortedAchats = useMemo(
     () => [...achats].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [achats]
   );
+
+  const filteredAchats = useMemo(() => {
+    if (!search.trim()) return sortedAchats;
+    const q = search.toLowerCase();
+    return sortedAchats.filter(a =>
+      a.modele.toLowerCase().includes(q) ||
+      a.pointure.toLowerCase().includes(q) ||
+      a.couleur.toLowerCase().includes(q) ||
+      a.fournisseur.toLowerCase().includes(q)
+    );
+  }, [sortedAchats, search]);
 
   const unifiedVentes = useMemo<UnifiedVente[]>(() => {
     const regular: UnifiedVente[] = ventes.map(v => ({ kind: 'vente', data: v }));
@@ -35,6 +47,29 @@ export default function HistoriqueScreen() {
       return dateB.localeCompare(dateA);
     });
   }, [ventes, ventesCredit]);
+
+  const filteredVentes = useMemo(() => {
+    if (!search.trim()) return unifiedVentes;
+    const q = search.toLowerCase();
+    return unifiedVentes.filter(item => {
+      if (item.kind === 'vente') {
+        const v = item.data;
+        return (
+          v.modele.toLowerCase().includes(q) ||
+          v.pointure.toLowerCase().includes(q) ||
+          v.couleur.toLowerCase().includes(q) ||
+          v.client.toLowerCase().includes(q)
+        );
+      }
+      const vc = item.data;
+      return (
+        vc.modele.toLowerCase().includes(q) ||
+        vc.pointure.toLowerCase().includes(q) ||
+        vc.couleur.toLowerCase().includes(q) ||
+        vc.clientNom.toLowerCase().includes(q)
+      );
+    });
+  }, [unifiedVentes, search]);
 
   const handleDownloadPDF = async (vente: typeof ventes[number]) => {
     if (downloading) return;
@@ -98,13 +133,30 @@ export default function HistoriqueScreen() {
         ))}
       </View>
 
+      {/* Search */}
+      <View style={[s.searchBox, { backgroundColor: c.card, borderColor: c.border }]}>
+        <Ionicons name="search" size={16} color={c.mutedForeground} />
+        <TextInput
+          style={[s.searchInput, { color: c.foreground }]}
+          placeholder="Rechercher un modèle, une pointure, un client..."
+          placeholderTextColor={c.mutedForeground}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Ionicons name="close-circle" size={16} color={c.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {tab === 'ventes' ? (
         <FlatList
-          data={unifiedVentes}
+          data={filteredVentes}
           keyExtractor={i => i.data.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.list}
-          ListEmptyComponent={<EmptyState icon="bag-outline" text="Aucune vente enregistrée" colors={c} />}
+          ListEmptyComponent={<EmptyState icon="bag-outline" text={search ? 'Aucun résultat' : 'Aucune vente enregistrée'} colors={c} />}
           renderItem={({ item }) => {
             if (item.kind === 'vente') {
               const v = item.data;
@@ -207,11 +259,11 @@ export default function HistoriqueScreen() {
         />
       ) : (
         <FlatList
-          data={sortedAchats}
+          data={filteredAchats}
           keyExtractor={i => i.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.list}
-          ListEmptyComponent={<EmptyState icon="cart-outline" text="Aucun achat enregistré" colors={c} />}
+          ListEmptyComponent={<EmptyState icon="cart-outline" text={search ? 'Aucun résultat' : 'Aucun achat enregistré'} colors={c} />}
           renderItem={({ item: a }) => (
             <View style={[s.card, { backgroundColor: c.card }]}>
               <View style={s.cardRow}>
@@ -253,6 +305,8 @@ const s = StyleSheet.create({
   tabs: { flexDirection: 'row', margin: 16, borderRadius: 10, padding: 4, borderWidth: 1 },
   tab: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
   tabText: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', padding: 0 },
   list: { paddingHorizontal: 16, paddingBottom: Platform.OS === 'web' ? 60 : 40 },
   card: { borderRadius: 12, padding: 14, marginBottom: 8 },
   cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
