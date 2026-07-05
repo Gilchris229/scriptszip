@@ -100,7 +100,7 @@ function escHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function printHtmlOnWeb(html: string): void {
+export function printHtmlOnWeb(html: string): void {
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;left:0;top:0;opacity:0';
   document.body.appendChild(iframe);

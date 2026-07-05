@@ -20,8 +20,9 @@ import { useStockAlerts } from '@/hooks/useStockAlerts';
 
 SplashScreen.preventAutoHideAsync();
 
-// Register service worker for offline support on web
-if (Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+// Register service worker for offline support on web (production only —
+// registering in dev caused an infinite reload loop with the kill-switch SW).
+if (!__DEV__ && Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
@@ -51,6 +52,7 @@ function ThemedStack() {
       <Stack.Screen name="historique" options={{ title: 'Historique' }} />
       <Stack.Screen name="credit" options={{ title: 'Crédit (ancien)' }} />
       <Stack.Screen name="statistiques" options={{ title: 'Statistiques' }} />
+      <Stack.Screen name="exporter" options={{ title: 'Exporter les données' }} />
       <Stack.Screen name="reglages" options={{ title: 'Réglages' }} />
       <Stack.Screen name="stock/[id]" options={{ title: 'Modifier article' }} />
       <Stack.Screen name="recu/[id]" options={{ title: 'Reçu de vente' }} />
@@ -67,13 +69,27 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  const [splashHidden, setSplashHidden] = React.useState(false);
+
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+      setSplashHidden(true);
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  // Don't block rendering forever on font loading (e.g. slow/blocked network
+  // for the Google Fonts CDN on web) — fall back to system fonts after a
+  // short timeout so the app is always usable.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync();
+      setSplashHidden(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!fontsLoaded && !fontError && !splashHidden) return null;
 
   return (
     <SafeAreaProvider>

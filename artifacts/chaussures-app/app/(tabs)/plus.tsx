@@ -10,6 +10,7 @@ import { formatCFA } from '@/utils';
 const MENU = [
   { label: 'Historique', sub: 'Achats & ventes', icon: 'time-outline' as const, route: '/historique', accent: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
   { label: 'Statistiques', sub: 'Analyse des ventes', icon: 'bar-chart-outline' as const, route: '/statistiques', accent: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
+  { label: 'Exporter', sub: 'Excel & PDF', icon: 'share-outline' as const, route: '/exporter', accent: '#f97316', bg: 'rgba(249,115,22,0.12)' },
   { label: 'Réglages', sub: 'Boutique & profil', icon: 'settings-outline' as const, route: '/reglages', accent: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
 ];
 
