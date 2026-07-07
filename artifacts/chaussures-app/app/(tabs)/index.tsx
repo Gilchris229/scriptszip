@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AlertTriangle } from 'lucide-react-native';
 import { useColors } from '@/hooks/useColors';
@@ -11,6 +12,7 @@ import { useStockAlerts } from '@/hooks/useStockAlerts';
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   // Subscribe to all three data sources explicitly so any change triggers a re-render
   const { reglages, achats, ventes, ventesCredit } = useStore();
   const { getLowStockItems } = useStockAlerts();
@@ -88,9 +90,13 @@ export default function DashboardScreen() {
           <Text style={[styles.shopName, { color: colors.foreground }]} numberOfLines={1}>{reglages.nomBoutique}</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Tableau de bord</Text>
         </View>
-        <View style={[styles.iconBox, { backgroundColor: colors.card }]}>
+        <TouchableOpacity
+          style={[styles.iconBox, { backgroundColor: colors.card }]}
+          onPress={() => router.push('/reglages')}
+          activeOpacity={0.7}
+        >
           <Ionicons name="storefront-outline" size={22} color={colors.primary} />
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Month selector */}
