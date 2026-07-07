@@ -69,27 +69,26 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  const [splashHidden, setSplashHidden] = React.useState(false);
-
   useEffect(() => {
+    // Hide the splash screen once fonts load (or on error).
+    // On web, fonts are loaded from a CDN and may be slow; we don't block
+    // rendering — the app uses system fonts as a fallback until Inter arrives.
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
-      setSplashHidden(true);
     }
   }, [fontsLoaded, fontError]);
 
-  // Don't block rendering forever on font loading (e.g. slow/blocked network
-  // for the Google Fonts CDN on web) — fall back to system fonts after a
-  // short timeout so the app is always usable.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      SplashScreen.hideAsync();
-      setSplashHidden(true);
-    }, 2000);
-    return () => clearTimeout(timer);
+    // On web, SplashScreen may not exist; hide it unconditionally on mount
+    // so we never block rendering waiting for the native splash API.
+    if (Platform.OS === 'web') {
+      SplashScreen.hideAsync().catch(() => {});
+    }
   }, []);
 
-  if (!fontsLoaded && !fontError && !splashHidden) return null;
+  // On native, block until fonts are ready to avoid a FOUT (flash of unstyled
+  // text). On web we render immediately and swap fonts in progressively.
+  if (Platform.OS !== 'web' && !fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>

@@ -1,0 +1,2 @@
+- [Font loading on Expo web](font-loading-web.md) — useFonts CDN fetch hangs in dev; never block web render on fontsLoaded.
+- [Service worker dev loop](service-worker-dev-loop.md) — unconditional SW registration in dev + kill-switch SW causes infinite reload loop; gate with !__DEV__.
